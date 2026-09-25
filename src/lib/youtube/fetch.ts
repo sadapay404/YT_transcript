@@ -167,6 +167,9 @@ export async function fetchTranscriptForUrl(
     const direct = await fetchCaptionsDirect(parsed.videoId, {
       ...(options.lang ? { lang: options.lang } : {}),
       timeoutMs: perStrategyTimeout,
+      // The ladder tries several identities; cap the whole thing so a blocked
+      // host fails fast with a report instead of a long spinner.
+      deadlineMs: 15_000,
       ...(proxiedFetcher() ? { fetcher: proxiedFetcher() } : {}),
     });
     diagnostics.push(...direct.diagnostics);

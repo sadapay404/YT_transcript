@@ -96,7 +96,12 @@ export interface FetchCaptionsOptions {
 
 /** Per-request and whole-ladder budgets. */
 const DEFAULT_TIMEOUT_MS = 6_000;
-const DEFAULT_DEADLINE_MS = 22_000;
+/**
+ * Whole-ladder ceiling. Every rung logs its own attempt, so giving up early
+ * still produces a full explanation — and the user never waits a minute for a
+ * verdict we could have reached faster.
+ */
+const DEFAULT_DEADLINE_MS = 15_000;
 
 /** A deadline counts down and clamps each individual request to it. */
 function makeBudget(options: FetchCaptionsOptions) {

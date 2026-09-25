@@ -16,7 +16,7 @@ afterEach(() => {
 
 describe("client identities", () => {
   it("tries several identities, since YouTube reveals captions per client", () => {
-    expect(INNERTUBE_CLIENTS.length).toBeGreaterThanOrEqual(3);
+    expect(INNERTUBE_CLIENTS.length).toBeGreaterThanOrEqual(5);
     const ids = INNERTUBE_CLIENTS.map((client) => client.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids[0]).toBe("web");
