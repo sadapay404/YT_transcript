@@ -246,7 +246,9 @@ redeploy).
 | Symptom | Cause | Fix |
 | ------- | ----- | --- |
 | `/status` says `GEMINI_API_KEY is not set` on the live site | **Scope or timing.** Vercel only injects a variable into the environments you ticked, and only into deployments created *after* you saved it | Set the variable for **All Environments** (a Production-only variable is *not* passed to Preview deployments), then **Redeploy**. The report now names the scope it detected: `environment.deployment.vercelEnv`, plus `deployedRef`/`deployedSha` so you can see which build you are looking at |
-| The whole app is missing on the production URL | The Production deployment is built from `main`, which in this repo is still the initial commit (no app code) | Merge the PR (or point Settings → Git → Production Branch at the branch you want), then redeploy |
+| `No entrypoint found in "/vercel/path0"` on a redeploy | The Production deployment was built from a commit with no app code (`main` held only the initial empty commit) | Merge the app into `main` (done), or point **Settings → Git → Production Branch** at a branch that has it. A *Redeploy* rebuilds the same empty commit, so the error repeats |
+| The production URL says **"This deployment is temporarily paused"** | A Vercel-side account/project state — typically a Hobby usage limit or a hold on the account, not your build | Open the Vercel dashboard for a banner (Project → **Usage**, or Account → **Limits**), clear it, then **Redeploy**. Nothing in this repo can cause or fix this |
+| A deployment URL asks you to log in | **Deployment Protection** (Vercel Authentication) — normal for Preview deployments | Open the production domain instead, or Project → **Settings → Deployment Protection** |
 | Captions: `blocked` / `too-many-requests` | YouTube challenged every client identity, or your host's IP range is throttled | Open `/status?deep=1` and read the **captions** check: it names the identity that answered and lists every attempt. Re-check in a few minutes, set `TRANSCRIPT_PROXY_URL`, or move host. The studio falls back to the bundled demo transcript *and says so* rather than pretending the video has no captions |
 | Captions: `empty` / `disabled` | A genuine answer about that video | YouTube reports the video's captions as disabled, or none exist yet. Try another video |
 | Gemini: `invalid-key` | Placeholder text, quotes or whitespace copied with the key | Re-paste just the key; regenerate if unsure |
@@ -314,6 +316,21 @@ studio still works — it shows the bundled demo transcript and explains why —
 for live captions set `TRANSCRIPT_PROXY_URL` (it is applied to *every* request:
 Innertube POSTs, signed and unsigned `timedtext`, and the watch page) or deploy
 somewhere with a residential-grade egress.
+
+## Renaming the project (e.g. to `transtudio.vercel.app`)
+
+The project name is independent of git: it does **not** matter which branch is
+Production, and renaming never touches commits, deployments, environment
+variables or protection settings. Only the `.vercel.app` hostnames change.
+
+1. Project → **Settings → General → Project Name** → `transtudio` → Save.
+2. Production then serves **`transtudio.vercel.app`**, and branch previews become
+   `transtudio-git-<branch>-….vercel.app`. Existing deployment URLs (the ones with
+   a build hash) keep working.
+3. If the name is already taken — every `*.vercel.app` name is global — pick
+   another, or add a custom domain you own: Project → **Settings → Domains**.
+4. Update any bookmarks, and if you had shared the old preview link, share the new
+   one.
 
 ## Environment variables (all optional except the first)
 
