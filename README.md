@@ -156,6 +156,16 @@ explanation instead of hanging.
 Every attempt is surfaced in the UI (*"What was tried (N)"*) and in
 `/status` (`Strategy`, `attempts`), so "no transcript" is never a silent verdict.
 
+`scripts/fake-youtube.mjs` reproduces the failure locally — it bot-walls the WEB
+identity exactly like a datacenter IP — and the opt-in integration suite proves
+the ladder recovers from it:
+
+```bash
+node scripts/fake-youtube.mjs &
+TRANSTUDIO_TEST_FAKE_YOUTUBE=http://127.0.0.1:4010/ \
+  ./node_modules/.bin/vitest run src/lib/youtube/pipeline.integration.test.ts
+```
+
 ### Theming without re-renders
 
 A theme is ~22 CSS variables (`--canvas`, `--surface`, `--ink`, `--accent`, `--glow`, `--blur`, …).

@@ -5,7 +5,7 @@
  * It is skipped unless you point it at a YouTube stand-in, so CI (which has
  * real internet but no stand-in) is unaffected. Run it locally with:
  *
- *   node /tmp/fake-youtube.mjs &            # or any reachable YouTube proxy
+ *   node scripts/fake-youtube.mjs &         # or any reachable YouTube proxy
  *   TRANSTUDIO_TEST_FAKE_YOUTUBE=http://127.0.0.1:4010/ \
  *     ./node_modules/.bin/vitest run src/lib/youtube/pipeline.integration.test.ts
  *
