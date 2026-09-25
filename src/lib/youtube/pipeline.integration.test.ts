@@ -60,7 +60,9 @@ describe.skipIf(!fake)("caption pipeline over real HTTP", () => {
     expect(transcript.segments[0].end).toBeGreaterThan(0);
     // A ms/s mix-up would show up as a wildly implausible duration.
     expect(transcript.durationSeconds).toBeLessThan(24 * 60 * 60);
-    expect(effectiveDuration(transcript.segments)).toBeCloseTo(transcript.durationSeconds, 0);
+    // `effectiveDuration` takes the player's own duration as its second
+    // argument; with no player (a pure fetch test) the transcript length wins.
+    expect(effectiveDuration(transcript.segments, 0)).toBeCloseTo(transcript.durationSeconds, 0);
 
     // Metadata travelled with the transcript.
     expect(metadata.videoId).toBe("aircAruvnKk");
