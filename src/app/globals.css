@@ -1,0 +1,788 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CADENCE STUDIO — GLOBAL DESIGN SYSTEM
+   ───────────────────────────────────────────────────────────────────────────
+   1. Custom variants      2. Fonts   3. Theme tokens   4. Tailwind bridge
+   5. Base layer           6. Components   7. Keyframes   8. Utilities
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────── 1. Custom variants ─────────────────────────── */
+/* Lets any utility be scoped to the active colour scheme:
+   `bg-white scheme-light:bg-black` etc. */
+@custom-variant scheme-light (&:where([data-scheme="light"] *));
+@custom-variant scheme-dark (&:where([data-scheme="dark"] *));
+
+/* ────────────────────────────── 2. Font stacks ──────────────────────────── */
+:root {
+  --font-sans-stack: "Inter Variable", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif-stack: "Source Serif 4 Variable", ui-serif, Georgia, Cambria,
+    "Times New Roman", Times, serif;
+  --font-dyslexic-stack: "OpenDyslexic", "Comic Sans MS", "Trebuchet MS",
+    sans-serif;
+  --font-mono-stack: "JetBrains Mono Variable", ui-monospace, SFMono-Regular,
+    Menlo, Consolas, monospace;
+
+  /* Typography Studio knobs — overridden inline on <html> by ThemeProvider. */
+  --transcript-font: var(--font-sans-stack);
+  --transcript-size: 1.125rem;
+  --transcript-leading: 1.85;
+  --transcript-tracking: 0.002em;
+  --transcript-measure: 66ch;
+
+  /* Shared motion */
+  --ease-liquid: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-snap: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ───────────────────────────── 3. Theme tokens ──────────────────────────── */
+/* Every theme only has to define these ~20 variables. Nothing else changes. */
+
+/* ── Pure OLED Black ─────────────────────────────────────────────────────── */
+:root,
+[data-theme="oled"] {
+  --canvas: #000000;
+  --canvas-2: #050507;
+  --surface: #0a0a0d;
+  --surface-2: #111116;
+  --elevated: #17171e;
+  --ink: #edeaf5;
+  --ink-soft: #a6a4b8;
+  --ink-faint: #6c6a80;
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.17);
+  --accent: #8b93ff;
+  --accent-2: #4dd4e8;
+  --accent-soft: rgb(139 147 255 / 0.14);
+  --accent-ink: #07070d;
+  --glow: rgb(139 147 255 / 0.35);
+  --blur: 0px;
+  --panel-shadow: 0 1px 0 0 rgb(255 255 255 / 0.04) inset;
+  --aurora-opacity: 0;
+  --grid-opacity: 0;
+  --danger: #ff6b6b;
+  --success: #4ade80;
+}
+
+/* ── Cyberpunk (neon magenta / electric cyan) ────────────────────────────── */
+[data-theme="cyberpunk"] {
+  --canvas: #06030d;
+  --canvas-2: #0b0518;
+  --surface: rgb(20 9 36 / 0.72);
+  --surface-2: rgb(31 14 54 / 0.72);
+  --elevated: rgb(41 19 68 / 0.9);
+  --ink: #f6ecff;
+  --ink-soft: #c3a7ec;
+  --ink-faint: #8069ab;
+  --line: rgb(255 47 185 / 0.22);
+  --line-strong: rgb(255 47 185 / 0.45);
+  --accent: #ff2fb9;
+  --accent-2: #22d3ee;
+  --accent-soft: rgb(255 47 185 / 0.18);
+  --accent-ink: #17021d;
+  --glow: rgb(255 47 185 / 0.45);
+  --blur: 8px;
+  --panel-shadow: 0 0 0 1px rgb(34 211 238 / 0.08) inset,
+    0 20px 60px -30px rgb(255 47 185 / 0.5);
+  --aurora-opacity: 0.32;
+  --grid-opacity: 0.35;
+  --danger: #ff5c8a;
+  --success: #34d399;
+}
+
+/* ── Aurora Glass (frosted panels over moving gradients) ─────────────────── */
+[data-theme="glass"] {
+  --canvas: #070b1a;
+  --canvas-2: #0a1026;
+  --surface: rgb(255 255 255 / 0.055);
+  --surface-2: rgb(255 255 255 / 0.09);
+  --elevated: rgb(255 255 255 / 0.13);
+  --ink: #f2f5ff;
+  --ink-soft: #c2cbe8;
+  --ink-faint: #8e99bb;
+  --line: rgb(255 255 255 / 0.15);
+  --line-strong: rgb(255 255 255 / 0.3);
+  --accent: #7c5cff;
+  --accent-2: #22d3ee;
+  --accent-soft: rgb(124 92 255 / 0.2);
+  --accent-ink: #08061c;
+  --glow: rgb(124 92 255 / 0.5);
+  --blur: 24px;
+  --panel-shadow: 0 1px 0 0 rgb(255 255 255 / 0.12) inset,
+    0 30px 80px -40px rgb(8 6 40 / 0.9);
+  --aurora-opacity: 1;
+  --grid-opacity: 0.18;
+  --danger: #ff7a7a;
+  --success: #5eead4;
+}
+
+/* ── Zen Paper (warm, light, distraction-free) ───────────────────────────── */
+[data-theme="zen"] {
+  --canvas: #f6f0e4;
+  --canvas-2: #fbf7ee;
+  --surface: #fffdf7;
+  --surface-2: #f2ebdb;
+  --elevated: #ffffff;
+  --ink: #2b2620;
+  --ink-soft: #5c5346;
+  --ink-faint: #8f8574;
+  --line: rgb(43 38 32 / 0.14);
+  --line-strong: rgb(43 38 32 / 0.28);
+  --accent: #b0562c;
+  --accent-2: #3f7d63;
+  --accent-soft: rgb(176 86 44 / 0.13);
+  --accent-ink: #fffdf7;
+  --glow: rgb(176 86 44 / 0.25);
+  --blur: 0px;
+  --panel-shadow: 0 1px 2px rgb(43 38 32 / 0.05),
+    0 12px 40px -30px rgb(43 38 32 / 0.4);
+  --aurora-opacity: 0;
+  --grid-opacity: 0.1;
+  --danger: #b3392f;
+  --success: #3f7d63;
+}
+
+/* ──────────────────────── 4. Tailwind theme bridge ──────────────────────── */
+/* `inline` so the utilities resolve to the live CSS variables above, which
+   means switching themes never re-generates a stylesheet. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-canvas-2: var(--canvas-2);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-elevated: var(--elevated);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+
+  --font-sans: var(--font-sans-stack);
+  --font-serif: var(--font-serif-stack);
+  --font-mono: var(--font-mono-stack);
+
+  --radius-panel: 1rem;
+  --radius-pill: 999px;
+
+  --shadow-panel: var(--panel-shadow);
+  --shadow-glow: 0 0 0 1px var(--line), 0 18px 60px -28px var(--glow);
+
+  --ease-liquid: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-snap: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ─────────────────────────────── 5. Base layer ──────────────────────────── */
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+    scrollbar-color: var(--line-strong) transparent;
+    scrollbar-width: thin;
+  }
+
+  html[data-scheme="dark"] {
+    color-scheme: dark;
+  }
+  html[data-scheme="light"] {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans-stack);
+    font-synthesis-weight: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: none;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--accent) 40%, transparent);
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+    background-clip: content-box;
+  }
+
+  /* Framer Motion's reduced-motion + our own setting both land here */
+  [data-motion="reduced"] *,
+  [data-motion="reduced"] *::before,
+  [data-motion="reduced"] *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .aurora-blob,
+    .animate-scan,
+    .animate-pulse-ring,
+    .clip-band[data-playing="true"] {
+      animation: none !important;
+    }
+  }
+}
+
+/* ────────────────────────────── 6. Components ───────────────────────────── */
+@layer components {
+  /* ── App shell + ambient background ────────────────────────────────────── */
+  .app-shell {
+    position: relative;
+    isolation: isolate;
+    min-height: 100dvh;
+  }
+
+  /* Aurora: three drifting blobs + grain + grid. Opacity is theme-driven, so
+     OLED/Zen cost literally nothing while Glass/Cyberpunk come alive. */
+  .aurora-field {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    opacity: var(--aurora-opacity);
+    transition: opacity 600ms var(--ease-liquid);
+    pointer-events: none;
+  }
+
+  .aurora-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(70px);
+    will-change: transform;
+  }
+  .aurora-blob--a {
+    width: 60vmax;
+    height: 60vmax;
+    top: -22vmax;
+    left: -12vmax;
+    background: radial-gradient(
+      circle at 30% 30%,
+      color-mix(in oklab, var(--accent) 70%, transparent),
+      transparent 68%
+    );
+    animation: aurora-a 26s var(--ease-liquid) infinite alternate;
+  }
+  .aurora-blob--b {
+    width: 52vmax;
+    height: 52vmax;
+    bottom: -20vmax;
+    right: -10vmax;
+    background: radial-gradient(
+      circle at 60% 40%,
+      color-mix(in oklab, var(--accent-2) 62%, transparent),
+      transparent 70%
+    );
+    animation: aurora-b 32s var(--ease-liquid) infinite alternate;
+  }
+  .aurora-blob--c {
+    width: 40vmax;
+    height: 40vmax;
+    top: 30%;
+    left: 45%;
+    background: radial-gradient(
+      circle at 50% 50%,
+      color-mix(in oklab, #ff2fb9 44%, transparent),
+      transparent 72%
+    );
+    animation: aurora-c 38s var(--ease-liquid) infinite alternate;
+  }
+
+  .aurora-grain {
+    position: absolute;
+    inset: 0;
+    opacity: 0.5;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+  }
+
+  .aurora-grid {
+    position: absolute;
+    inset: 0;
+    opacity: var(--grid-opacity);
+    background-image: linear-gradient(
+        to right,
+        color-mix(in oklab, var(--ink) 8%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in oklab, var(--ink) 8%, transparent) 1px,
+        transparent 1px
+      );
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse at 50% 0%, black 10%, transparent 75%);
+  }
+
+  /* ── Panels: the frosted-glass primitive ───────────────────────────────── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    backdrop-filter: blur(var(--blur)) saturate(150%);
+    -webkit-backdrop-filter: blur(var(--blur)) saturate(150%);
+    box-shadow: var(--panel-shadow);
+  }
+
+  .panel-solid {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+  }
+
+  .hairline {
+    border-color: var(--line);
+  }
+
+  /* ── Buttons ───────────────────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.8125rem;
+    font-weight: 550;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    color: var(--ink-soft);
+    background: transparent;
+    border: 1px solid transparent;
+    transition: color 180ms var(--ease-liquid),
+      background-color 180ms var(--ease-liquid),
+      border-color 180ms var(--ease-liquid), transform 180ms var(--ease-snap),
+      box-shadow 220ms var(--ease-liquid);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:hover {
+    color: var(--ink);
+    background: color-mix(in oklab, var(--ink) 8%, transparent);
+  }
+  .btn:active {
+    transform: translateY(1px) scale(0.985);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-outline {
+    border-color: var(--line-strong);
+    color: var(--ink);
+  }
+  .btn-outline:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: color-mix(in oklab, var(--accent) 70%, white);
+    box-shadow: 0 10px 30px -14px var(--glow);
+  }
+  .btn-primary:hover {
+    background: color-mix(in oklab, var(--accent) 86%, white);
+    color: var(--accent-ink);
+    box-shadow: 0 14px 40px -12px var(--glow);
+  }
+
+  .btn-icon {
+    padding: 0.5rem;
+    border-radius: 0.7rem;
+    aspect-ratio: 1;
+  }
+
+  /* ── Chips / pills ─────────────────────────────────────────────────────── */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    background: color-mix(in oklab, var(--ink) 7%, transparent);
+    border: 1px solid var(--line);
+    font-variant-numeric: tabular-nums;
+  }
+  .chip-accent {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-color: color-mix(in oklab, var(--accent) 35%, transparent);
+  }
+
+  /* ── Inputs ────────────────────────────────────────────────────────────── */
+  .field {
+    width: 100%;
+    background: color-mix(in oklab, var(--canvas) 55%, transparent);
+    border: 1px solid var(--line);
+    border-radius: 0.85rem;
+    padding: 0.65rem 0.85rem;
+    color: var(--ink);
+    font-size: 0.9rem;
+    transition: border-color 200ms var(--ease-liquid),
+      box-shadow 200ms var(--ease-liquid), background-color 200ms;
+  }
+  .field::placeholder {
+    color: var(--ink-faint);
+  }
+  .field:focus {
+    outline: none;
+    border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+
+  .kbd {
+    font-family: var(--font-mono-stack);
+    font-size: 0.65rem;
+    padding: 0.15rem 0.35rem;
+    border-radius: 0.35rem;
+    border: 1px solid var(--line-strong);
+    background: color-mix(in oklab, var(--ink) 8%, transparent);
+    color: var(--ink-soft);
+  }
+
+  /* ── Reading surface (Typography Studio) ───────────────────────────────── */
+  .reading-type {
+    font-family: var(--transcript-font);
+    font-size: var(--transcript-size);
+    line-height: var(--transcript-leading);
+    letter-spacing: var(--transcript-tracking);
+    max-width: var(--transcript-measure);
+    text-wrap: pretty;
+  }
+
+  .transcript-line {
+    position: relative;
+    border-radius: 0.7rem;
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    transition: background-color 260ms var(--ease-liquid),
+      color 260ms var(--ease-liquid), transform 260ms var(--ease-snap);
+  }
+  .transcript-line:hover {
+    background: color-mix(in oklab, var(--ink) 6%, transparent);
+  }
+  .transcript-line[data-active="true"] {
+    color: var(--ink);
+    text-shadow: 0 0 26px color-mix(in oklab, var(--accent) 45%, transparent);
+  }
+  .transcript-line:not([data-active="true"]) {
+    color: color-mix(in oklab, var(--ink) 72%, transparent);
+  }
+
+  /* The liquid active-line glow (Framer Motion supplies the movement). */
+  .active-wash {
+    position: absolute;
+    inset: -1px -4px;
+    border-radius: 0.85rem;
+    background: linear-gradient(
+      100deg,
+      color-mix(in oklab, var(--accent) 20%, transparent),
+      color-mix(in oklab, var(--accent-2) 12%, transparent) 60%,
+      transparent
+    );
+    box-shadow: 0 10px 40px -20px var(--glow);
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  /* ── Clip bands (Step 5) ───────────────────────────────────────────────── */
+  .clip-band {
+    position: relative;
+    border-left: 3px solid var(--clip-hex, var(--accent));
+    border-radius: 0.35rem 0.85rem 0.85rem 0.35rem;
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--clip-hex) 22%, transparent);
+    transition: transform 320ms var(--ease-liquid),
+      box-shadow 320ms var(--ease-liquid), filter 320ms var(--ease-liquid);
+  }
+  .clip-band:hover,
+  .clip-band[data-hovered="true"] {
+    transform: translateX(3px) scale(1.006);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--clip-hex) 60%, transparent),
+      var(--clip-glow, 0 14px 44px -14px var(--accent));
+    filter: saturate(1.25);
+  }
+  .clip-band[data-playing="true"] {
+    animation: clip-breathe 2.4s ease-in-out infinite;
+  }
+
+  .clip-floating {
+    animation: rise-in 260ms var(--ease-snap) both;
+  }
+
+  /* ── Chat ──────────────────────────────────────────────────────────────── */
+  .bubble-assistant {
+    background: color-mix(in oklab, var(--ink) 6%, transparent);
+    border: 1px solid var(--line);
+    border-radius: 1rem 1rem 1rem 0.25rem;
+  }
+  .bubble-user {
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+    border-radius: 1rem 1rem 0.25rem 1rem;
+  }
+
+  .stream-caret::after {
+    content: "";
+    display: inline-block;
+    width: 0.5ch;
+    height: 1.05em;
+    margin-left: 2px;
+    vertical-align: -0.18em;
+    background: var(--accent);
+    border-radius: 1px;
+    animation: blink 1.1s steps(2, start) infinite;
+  }
+
+  /* ── Misc ──────────────────────────────────────────────────────────────── */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--ink) 6%, transparent),
+      color-mix(in oklab, var(--ink) 12%, transparent),
+      color-mix(in oklab, var(--ink) 6%, transparent)
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+    border-radius: 0.5rem;
+  }
+
+  .text-gradient {
+    background: linear-gradient(
+      100deg,
+      var(--ink) 10%,
+      var(--accent) 55%,
+      var(--accent-2) 90%
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+
+  .fade-y {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black 22px,
+      black calc(100% - 34px),
+      transparent 100%
+    );
+  }
+
+  /* Range inputs used by the Typography Studio sliders */
+  .range-input {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 22px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .range-input::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--ink) 18%, transparent);
+  }
+  .range-input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--canvas);
+    box-shadow: 0 0 0 1px var(--line-strong), 0 4px 12px -4px var(--glow);
+    transition: transform 160ms var(--ease-snap);
+  }
+  .range-input::-webkit-slider-thumb:hover {
+    transform: scale(1.18);
+  }
+  .range-input::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--ink) 18%, transparent);
+  }
+  .range-input::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--canvas);
+  }
+}
+
+/* ────────────────────────────── 7. Keyframes ────────────────────────────── */
+@keyframes aurora-a {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(8vmax, 6vmax, 0) scale(1.15);
+  }
+  100% {
+    transform: translate3d(-4vmax, 12vmax, 0) scale(1.05);
+  }
+}
+@keyframes aurora-b {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1.05);
+  }
+  50% {
+    transform: translate3d(-10vmax, -6vmax, 0) scale(1.2);
+  }
+  100% {
+    transform: translate3d(6vmax, -12vmax, 0) scale(1);
+  }
+}
+@keyframes aurora-c {
+  0% {
+    transform: translate3d(-6vmax, 0, 0) scale(0.9);
+  }
+  50% {
+    transform: translate3d(6vmax, -8vmax, 0) scale(1.15);
+  }
+  100% {
+    transform: translate3d(-8vmax, 6vmax, 0) scale(1);
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes clip-breathe {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--clip-hex) 45%, transparent),
+      0 0 0 0 color-mix(in oklab, var(--clip-hex) 30%, transparent);
+  }
+  50% {
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--clip-hex) 75%, transparent),
+      0 0 34px 4px color-mix(in oklab, var(--clip-hex) 22%, transparent);
+  }
+}
+@keyframes pulse-ring {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.9);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+@keyframes scan-line {
+  0% {
+    transform: translateY(-110%);
+  }
+  100% {
+    transform: translateY(210%);
+  }
+}
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ───────────────────────────── 8. Utilities ─────────────────────────────── */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility scroll-shadow {
+  /* Soft top/bottom fades on scroll rails */
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 18px,
+    black calc(100% - 28px),
+    transparent 100%
+  );
+}
+
+@utility animate-pulse-ring {
+  animation: pulse-ring 2.4s var(--ease-liquid) infinite;
+}
+@utility animate-scan {
+  animation: scan-line 2.6s linear infinite;
+}
+@utility animate-spin-slow {
+  animation: spin-slow 14s linear infinite;
+}
+
+/* Nicer native controls inside the assistant panel / resizer */
+@utility drag-none {
+  -webkit-user-drag: none;
+  user-select: none;
+}
