@@ -1,6 +1,6 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- *  Cadence Studio — shared type contracts
+ *  TranStudio — shared type contracts
  * ─────────────────────────────────────────────────────────────────────────────
  *  These types are the spine of the whole app. Every layer (scraper, player,
  *  sync engine, Gemini, clipper, exporters) speaks only in these shapes, so
@@ -83,7 +83,13 @@ export type TranscriptErrorCode =
   | "unknown";
 
 export type FetchTranscriptResult =
-  | { ok: true; transcript: TranscriptPayload; metadata: VideoMetadata }
+  | {
+      ok: true;
+      transcript: TranscriptPayload;
+      metadata: VideoMetadata;
+      /** Extra context for the UI, e.g. why a demo transcript was served. */
+      notice?: string;
+    }
   | {
       ok: false;
       error: TranscriptErrorCode;
@@ -338,6 +344,8 @@ export interface PlaybackController {
   getDuration(): number;
   /** Loop playback between two timestamps (clip preview). */
   setLoopRange(range: ClipRange | null): void;
+  setMuted(muted: boolean): void;
+  isMuted(): boolean;
 }
 
 export interface ClipRange {

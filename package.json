@@ -1,5 +1,5 @@
 {
-  "name": "cadence",
+  "name": "transtudio",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -38,7 +38,7 @@
     "typescript": "^5",
     "vitest": "^5.0.1"
   },
-  "description": "Cadence \u2014 YouTube transcript, AI clipping and export studio (Next.js + Gemini, free tier)",
+  "description": "TranStudio \u2014 read any YouTube video: synchronized transcripts, readable exports, free-tier AI.",
   "engines": {
     "node": "22.x"
   }

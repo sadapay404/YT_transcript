@@ -1,6 +1,6 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- *  Cadence Studio — design tokens & static configuration
+ *  TranStudio — design tokens & static configuration
  * ─────────────────────────────────────────────────────────────────────────────
  *  Every themeable surface in the app reads from here (or from the CSS custom
  *  properties these ids resolve to), so adding a 5th theme is a 12-line diff.
@@ -14,11 +14,11 @@ import type {
   ViewModeDefinition,
 } from "./types";
 
-export const APP_NAME = "Cadence";
-export const APP_SUBTITLE = "Transcript Studio";
+export const APP_NAME = "TranStudio";
+export const APP_SUBTITLE = "Transcript & Clip Studio";
 export const APP_TAGLINE = "Read it. Clip it. Ship it.";
 export const APP_DESCRIPTION =
-  "Turn any YouTube video into a searchable, AI-clipped reading experience — synchronized transcripts, viral clip detection with Gemini, and one-click exports to txt, srt, vtt and Markdown.";
+  "Turn any YouTube video into a searchable, readable transcript — synchronized playback, AI-assisted reading and one-click exports to txt, srt, vtt and Markdown.";
 
 /* ─────────────────────────────── Themes ─────────────────────────────────── */
 
@@ -53,10 +53,6 @@ export const THEMES: ThemeDefinition[] = [
     swatch: ["#f6f0e4", "#2f2a23", "#b0562c"],
   },
 ];
-
-export const THEME_IDS = THEMES.map((t) => t.id) as ThemeDefinition["id"][];
-
-export const DEFAULT_THEME = THEMES[0];
 
 /* ────────────────────────── Typography Studio ───────────────────────────── */
 
@@ -102,9 +98,6 @@ export const FONT_RECOMMENDED: Record<
   serif: { lineHeight: 1.75, letterSpacing: 0 },
   dyslexic: { lineHeight: 2, letterSpacing: 0.018 },
 };
-
-export const MONO_STACK =
-  "'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
 export const FONT_SIZE_RANGE = { min: 0.875, max: 1.75, step: 0.0625 } as const; // rem
 export const LINE_HEIGHT_RANGE = { min: 1.3, max: 2.4, step: 0.05 } as const;
@@ -395,7 +388,7 @@ export const PLAYBACK = {
 /* ──────────────────────────── App defaults ──────────────────────────────── */
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: "oled",
+  theme: "zen",
   typography: {
     fontFamily: "sans",
     fontSize: 1.125,
@@ -417,10 +410,17 @@ export const SIDEBAR_WIDTH_RANGE = { min: 340, max: 760 } as const;
 
 /* ────────────────────────── Local storage keys ──────────────────────────── */
 
+/**
+ * Preferences live in a **cookie**, not localStorage, so the server can read
+ * them and render the correct theme in the very first HTML response — no flash
+ * of the wrong theme, no client-side boot script.
+ */
+export const PREFERENCES_COOKIE = "transtudio.prefs";
+export const PREFERENCES_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
+
+/** Non-preference client storage (chat drafts, transient UI state). */
 export const STORAGE_KEYS = {
-  settings: "cadence.settings.v1",
-  session: "cadence.session.v1",
-  chat: "cadence.chat.v1",
+  chat: "transtudio.chat.v1",
 } as const;
 
 /* ──────────────────────────── Input helpers ─────────────────────────────── */

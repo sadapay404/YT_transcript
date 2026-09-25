@@ -1,4 +1,4 @@
-# Deploy Cadence for free (and verify it works)
+# Deploy TranStudio for free (and verify it works)
 
 Everything below costs **$0** and needs **no credit card**. Total time: about 5 minutes.
 
@@ -20,7 +20,7 @@ You get `https://<your-project>.vercel.app`. Open `/status` on the live URL to c
 
 Or use the one-click button (clones the repo and prompts for the key):
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsadapay404%2FYT_transcript&env=GEMINI_API_KEY&envDescription=Free%20key%20from%20aistudio.google.com%2Fapikey%20%E2%80%94%20no%20credit%20card&envLink=https%3A%2F%2Faistudio.google.com%2Fapikey&project-name=cadence&repository-name=cadence)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsadapay404%2FYT_transcript&env=GEMINI_API_KEY&envDescription=Free%20key%20from%20aistudio.google.com%2Fapikey%20%E2%80%94%20no%20credit%20card&envLink=https%3A%2F%2Faistudio.google.com%2Fapikey&project-name=transtudio&repository-name=transtudio)
 
 ---
 
@@ -105,7 +105,7 @@ vercel logs <url>    # tail runtime logs
 
 ## Path B — other free hosts
 
-| Host                        | Free?                        | Works with Cadence? | Notes |
+| Host                        | Free?                        | Works with TranStudio? | Notes |
 | --------------------------- | ---------------------------- | ------------------- | ----- |
 | **Vercel (Hobby)**          | Yes, permanent, no card      | ✅ Best fit         | Native Next.js; free SSL + CDN. Non-commercial use per their terms. |
 | **Netlify (free)**          | Yes                          | ✅ via `@netlify/plugin-nextjs` | Add the plugin; server actions supported. |
@@ -114,7 +114,7 @@ vercel logs <url>    # tail runtime logs
 | **Railway / Fly.io**        | Trial credits, then paid     | ✅                  | Not permanently free. |
 | **GitHub Pages / any static host** | Yes                   | ❌ **No**           | Static hosting has no server runtime; caption scraping would hit CORS and your Gemini key would leak to the browser. |
 
-Rule of thumb: if the host can run a Node server function, it can run Cadence.
+Rule of thumb: if the host can run a Node server function, it can run TranStudio.
 
 ---
 
@@ -156,7 +156,7 @@ curl -s "https://your-app.vercel.app/api/health?deep=1&video=dQw4w9WgXcQ" | jq
 ```
 
 Point a free uptime monitor (UptimeRobot, Better Stack, cron-job.org) at the
-shallow endpoint — it returns `200` when healthy and `x-cadence-health: ok`.
+shallow endpoint — it returns `200` when healthy and `x-transtudio-health: ok`.
 
 ### Locally, exactly like production
 
@@ -247,10 +247,10 @@ redeploy).
 | ------- | ----- | --- |
 | `/status` says `GEMINI_API_KEY is not set` on the live site | Variable added after the deployment, or only for one environment | Add it to **all** environments, then **Redeploy** |
 | Captions: `too-many-requests` | YouTube throttling your host's IP range | Retry in a few minutes; set `TRANSCRIPT_PROXY_URL`; or move to another host |
-| Captions: `blocked` / `ENOTFOUND` | Host/sandbox has no outbound access to youtube.com | Deploy to Vercel, or run locally |
+| Captions: `blocked` / `ENOTFOUND` | Host/sandbox has no outbound access to youtube.com | Deploy to Vercel, or run locally. In the browser the app automatically falls back to its bundled demo transcript and says so — reading, seeking and exporting stay usable |
 | Gemini: `invalid-key` | Placeholder text, quotes or whitespace copied with the key | Re-paste just the key; regenerate if unsure |
 | Gemini: `quota` | Free-tier rate limit | Wait ~60s, or set `GEMINI_MODEL=gemini-2.5-flash-lite` |
-| Build fails on install | Host forcing a package name with capitals | The repo's `package.json` name is `cadence`, so a project name like `YT_transcript` is fine |
+| Build fails on install | Host forcing a package name with capitals | The repo's `package.json` name is `transtudio`, so any project name is fine |
 | Blank page after deploy | Stale build cache | **Deployments → ⋯ → Redeploy** with "Clear cache" |
 
 ## Environment variables (all optional except the first)
@@ -260,7 +260,7 @@ GEMINI_API_KEY=            # free key — required for the AI sidebar (Steps 4�
 GEMINI_MODEL=gemini-2.5-flash        # any free-tier Gemini model id
 GEMINI_FALLBACK_MODEL=gemini-2.5-flash-lite
 TRANSCRIPT_PROXY_URL=      # optional egress proxy for caption scraping
-CADENCE_DEMO_MODE=1        # force the bundled demo transcript (no scraping)
+TRANSTUDIO_DEMO_MODE=1     # force the bundled demo transcript (no scraping)
 ```
 
 See `.env.example` for the annotated list.

@@ -39,20 +39,21 @@ const STATUS_STYLE: Record<
 > = {
   pass: {
     icon: <CheckCircle2 className="h-4 w-4" />,
-    ring: "border-emerald-400/40 bg-emerald-500/10",
-    text: "text-emerald-300",
+    ring: "border-emerald-500/40 bg-emerald-500/10",
+    // Light themes (Zen Paper) need much darker text for contrast.
+    text: "text-emerald-700 scheme-dark:text-emerald-300",
     label: "Pass",
   },
   warn: {
     icon: <AlertTriangle className="h-4 w-4" />,
-    ring: "border-amber-400/40 bg-amber-500/10",
-    text: "text-amber-300",
+    ring: "border-amber-500/40 bg-amber-500/10",
+    text: "text-amber-700 scheme-dark:text-amber-300",
     label: "Attention",
   },
   fail: {
     icon: <XCircle className="h-4 w-4" />,
-    ring: "border-rose-400/40 bg-rose-500/10",
-    text: "text-rose-300",
+    ring: "border-rose-500/40 bg-rose-500/10",
+    text: "text-rose-700 scheme-dark:text-rose-300",
     label: "Fail",
   },
   skipped: {
@@ -111,11 +112,15 @@ export function StatusDashboard() {
 
   const headline = useMemo(() => {
     if (!report) return { text: "Running checks…", tone: "text-ink-soft" };
-    if (report.ok) return { text: "Everything checks out", tone: "text-emerald-300" };
+    if (report.ok)
+      return {
+        text: "Everything checks out",
+        tone: "text-emerald-700 scheme-dark:text-emerald-300",
+      };
     const failed = report.checks.filter((c) => c.status === "fail").length;
     return {
       text: `${failed} check${failed === 1 ? "" : "s"} failing`,
-      tone: "text-rose-300",
+      tone: "text-rose-700 scheme-dark:text-rose-300",
     };
   }, [report]);
 
@@ -211,7 +216,7 @@ export function StatusDashboard() {
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="mt-4 flex items-start gap-2 rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2.5 text-[12.5px] text-amber-200"
+            className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[12.5px] text-amber-800 scheme-dark:text-amber-200"
           >
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{warning}</span>
@@ -228,7 +233,7 @@ export function StatusDashboard() {
         )}
 
         {state.phase === "error" && (
-          <div className="panel border-rose-400/40 p-4 text-[13px] text-rose-200">
+          <div className="panel border-rose-500/40 p-4 text-[13px] text-rose-800 scheme-dark:text-rose-200">
             Could not load the health report: {state.message}
           </div>
         )}

@@ -1,6 +1,6 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- *  Cadence Studio — shared utilities (safe on both client and server)
+ *  TranStudio — shared utilities (safe on both client and server)
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import { clsx, type ClassValue } from "clsx";
@@ -89,18 +89,6 @@ export function readingMinutes(wordCount: number, wpm = 220): number {
   return Math.max(1, Math.round(wordCount / wpm));
 }
 
-export function formatRelativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
-  const diff = Math.max(0, Date.now() - then);
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
 /* ───────────────────────────── String helpers ───────────────────────────── */
 
 export function truncate(text: string, max: number): string {
@@ -132,10 +120,6 @@ export function slugify(text: string, fallback = "transcript"): string {
     .replace(/-+/g, "-")
     .slice(0, 60);
   return slug || fallback;
-}
-
-export function titleCase(text: string): string {
-  return text.replace(/\w\S*/g, (word) => word[0].toUpperCase() + word.slice(1));
 }
 
 /** Escape a CSV cell (quotes doubled, cell wrapped when needed). */
@@ -269,15 +253,4 @@ export function safeJsonParse<T>(value: string | null | undefined): T | null {
   } catch {
     return null;
   }
-}
-
-export function humanBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-/** Small helper for staggered animation delays without re-computing indexes. */
-export function staggerDelay(index: number, step = 0.03, max = 0.4) {
-  return Math.min(index * step, max);
 }

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   CADENCE STUDIO — GLOBAL DESIGN SYSTEM
+   TRANSTUDIO — GLOBAL DESIGN SYSTEM
    ───────────────────────────────────────────────────────────────────────────
    1. Custom variants      2. Fonts   3. Theme tokens   4. Tailwind bridge
    5. Base layer           6. Components   7. Keyframes   8. Utilities
@@ -779,6 +779,13 @@
 }
 @utility animate-spin-slow {
   animation: spin-slow 14s linear infinite;
+}
+
+/* Long transcripts: let the browser skip layout/paint for off-screen lines
+   while keeping the scroll height stable (no virtualisation library needed). */
+@utility cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 2.2rem;
 }
 
 /* Nicer native controls inside the assistant panel / resizer */

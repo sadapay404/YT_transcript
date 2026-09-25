@@ -12,7 +12,7 @@
 import { useEffect, useMemo } from "react";
 import { MotionConfig } from "framer-motion";
 
-import { FONT_OPTIONS, THEMES } from "@/lib/constants";
+import { FONT_OPTIONS } from "@/lib/constants";
 import type { ColorScheme, ThemeId } from "@/lib/types";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 
@@ -75,13 +75,4 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   );
 
   return <MotionConfig {...motionProps}>{children}</MotionConfig>;
-}
-
-/** Read the active theme definition (label, swatches, colour scheme…). */
-export function useActiveTheme() {
-  const theme = useSettingsStore((s) => s.theme);
-  return useMemo(
-    () => THEMES.find((t) => t.id === theme) ?? THEMES[0],
-    [theme],
-  );
 }

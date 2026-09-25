@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 /**
- * Cadence Studio — Next.js configuration.
+ * TranStudio — Next.js configuration.
  *
  * Everything here is free-tier friendly:
  *  - No paid image optimization providers, no analytics, no telemetry services.

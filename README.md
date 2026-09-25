@@ -1,4 +1,4 @@
-# Cadence — Transcript Studio
+# TranStudio — Transcript & Clip Studio
 
 > Read it. Clip it. Ship it.
 
@@ -12,7 +12,7 @@ Turn any YouTube video into a **synchronized, readable transcript**, then let **
 
 ## Deploy it as a free website (5 minutes)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsadapay404%2FYT_transcript&env=GEMINI_API_KEY&envDescription=Free%20key%20from%20aistudio.google.com%2Fapikey%20%E2%80%94%20no%20credit%20card&envLink=https%3A%2F%2Faistudio.google.com%2Fapikey&project-name=cadence&repository-name=cadence)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsadapay404%2FYT_transcript&env=GEMINI_API_KEY&envDescription=Free%20key%20from%20aistudio.google.com%2Fapikey%20%E2%80%94%20no%20credit%20card&envLink=https%3A%2F%2Faistudio.google.com%2Fapikey&project-name=transtudio&repository-name=transtudio)
 
 1. Push to GitHub (done), then import the repo at <https://vercel.com/new>.
 2. Add `GEMINI_API_KEY` in **Settings → Environment Variables** (free key, no card).
@@ -57,7 +57,7 @@ npm run build && npm start
 If you are scaffolding this project from scratch, the exact command used was:
 
 ```bash
-npx create-next-app@latest cadence \
+npx create-next-app@latest transtudio \
   --ts --tailwind --eslint --app --src-dir \
   --import-alias "@/*" --use-npm --empty --disable-git
 
@@ -76,8 +76,8 @@ npm install framer-motion lucide-react zustand youtube-transcript @google/genai 
 | Framework  | Next.js 16 (App Router, Turbopack, React 19)                        |
 | Styling    | Tailwind CSS v4 + CSS custom properties (4 full themes)             |
 | Motion     | Framer Motion (shared-layout transitions, kinetic typography)       |
-| Player     | YouTube IFrame Player API (Step 2) — no heavy player dependency     |
-| Transcript | `youtube-transcript` (server-side scrape, no API key)               |
+| Player     | YouTube IFrame Player API — raw, no player dependency               |
+| Transcript | `youtube-transcript` (server action, server-side scrape, no API key) |
 | AI         | `@google/genai` → `gemini-2.5-flash` (1M-token context, free tier)  |
 | State      | Zustand + `persist` (settings survive refreshes)                    |
 | Fonts      | Self-hosted via `@fontsource` (Inter, Source Serif 4, JetBrains Mono, OpenDyslexic) |
@@ -90,32 +90,41 @@ npm install framer-motion lucide-react zustand youtube-transcript @google/genai 
 ```
 src/
 ├─ app/
-│  ├─ layout.tsx          # fonts + pre-paint theme boot script + providers
-│  ├─ globals.css         # ⭐ the whole design system (themes, tokens, components)
+│  ├─ layout.tsx          # reads the preferences cookie → SSR theme (no flash)
+│  ├─ globals.css         # ⭐ the whole design system (4 themes, tokens, components)
+│  ├─ page.tsx            # the studio (workspace)
+│  ├─ actions/
+│  │  └─ transcript.ts    # ⭐ server action: URL → full transcript payload
+│  ├─ status/page.tsx     # diagnostics dashboard ("is it working?")
+│  ├─ api/health/route.ts # shallow + deep health JSON (monitor-friendly)
 │  ├─ manifest.ts         # PWA manifest
-│  ├─ icon.png            # PWA / favicon icon
-│  ├─ page.tsx            # studio entry (Step 2 replaces the landing view)
-│  ├─ status/page.tsx     # ⭐ diagnostics dashboard (is it working?)
-│  └─ api/health/route.ts # shallow + deep health JSON (monitor-friendly)
+│  └─ icon.png            # PWA / favicon icon
 ├─ lib/
 │  ├─ types.ts            # ⭐ every shared contract (transcript, chat, clips, exports…)
-│  ├─ constants.ts        # themes, font options, clip palette, export presets, Gemini config
+│  ├─ prefs.ts            # cookie preferences: parse, validate, persist
+│  ├─ constants.ts        # themes, fonts, clip palette, export presets, Gemini config
 │  ├─ utils.ts            # timecodes, URL parsing, formatters
 │  ├─ health.ts           # deployment diagnostics + self-tests
-│  ├─ bootScript.ts       # pre-paint theme/typography hydration (no flash)
 │  ├─ gemini/client.ts    # Gemini client factory + error taxonomy (server only)
 │  └─ youtube/
-│     ├─ normalize.ts     # ⭐ ms-vs-seconds detection + self-healing (tested)
+│     ├─ fetch.ts         # ⭐ the engine: scrape → normalise → payload (+ demo fallback)
+│     ├─ metadata.ts      # title/author/duration/caption tracks (InnerTube → oEmbed)
+│     ├─ normalize.ts     # ms-vs-seconds detection + self-healing (tested)
+│     ├─ sync.ts          # playhead ↔ line maths: active line, scroll targets (tested)
+│     ├─ demo.ts          # bundled demo transcript (never a dead end)
 │     └─ probe.ts         # caption fetch probe + error classification
-├─ providers/
-│  └─ ThemeProvider.tsx   # settings → <html> data-attributes + CSS variables
+├─ providers/ThemeProvider.tsx   # settings → <html> data-attributes + CSS variables
 ├─ stores/
-│  └─ useSettingsStore.ts # persisted theme / typography / layout state
+│  ├─ useSettingsStore.ts # theme / typography / layout (cookie-backed)
+│  ├─ useTranscriptStore.ts # fetch lifecycle + parsed transcript
+│  └─ usePlaybackStore.ts # playhead, duration, active line, clip loop
 └─ components/
-   ├─ ui/                 # Segmented, Slider, Switch (Framer Motion primitives)
-   ├─ layout/             # AppShell, StudioHeader, ThemeSwitcher, ViewModeSwitch, AuroraBackdrop
-   ├─ studio/             # TypographyStudio, ThemeGallery, ClipPalettePreview, LayoutPreview
-   └─ landing/            # LandingView (Step 1 verification surface)
+   ├─ player/YouTubePlayer.tsx   # raw IFrame API + imperative PlaybackController
+   ├─ workspace/                 # UrlBar, VideoPane, TranscriptPane, TranscriptLine, Workspace
+   ├─ layout/                    # AppShell, StudioHeader, ThemeSwitcher, StylePanel, …
+   ├─ studio/TypographyStudio.tsx
+   ├─ status/StatusDashboard.tsx
+   └─ ui/                        # Segmented, Slider, Switch
 ```
 
 ### Theming without re-renders
@@ -127,7 +136,9 @@ Tailwind is bridged to them once with `@theme inline`, which produces the usual 
 <div class="bg-surface text-ink border-line rounded-panel shadow-glow">…</div>
 ```
 
-Switching themes only writes `data-theme` on `<html>` — **no React re-render, no stylesheet rebuild, no flash** (a small inline script applies the saved theme before first paint).
+Switching themes only writes `data-theme` on `<html>` — **no React re-render, no stylesheet rebuild, no flash**. Preferences are stored in a **cookie**, so `layout.tsx` renders the saved theme straight into the first HTML response: verified with
+`curl -H 'Cookie: transtudio.prefs=…' localhost:3000` returning
+`<html data-theme="cyberpunk" data-scheme="dark">` server-side. Zen Paper is the default.
 
 Themes: **Pure OLED** (`#000000`, default) · **Cyberpunk** (neon magenta/cyan) · **Aurora Glass** (frosted panels over drifting gradients) · **Zen Paper** (warm light reading mode).
 
@@ -142,8 +153,8 @@ Themes: **Pure OLED** (`#000000`, default) · **Cyberpunk** (neon magenta/cyan) 
 | Step | Scope | Status |
 | ---- | ----- | ------ |
 | **1** | Scaffolding, type contracts, design system, 4 themes, typography studio, motion primitives | ✅ shipped |
-| **2** | `youtube-transcript` server action + IFrame player + raw transcript render | ⏳ |
-| **3** | Sync engine: auto-scroll, kinetic active line, click-to-seek, layout modes | ⏳ |
+| **2** | `youtube-transcript` server action + IFrame player + transcript render (click-to-seek) | ✅ shipped |
+| **3** | Sync engine: auto-scroll follow, kinetic liquid active line | ⏳ |
 | **4** | Gemini chat sidebar (streaming, transcript context injected silently) | ⏳ |
 | **5** | Viral Clipper: structured JSON clips → colour-coded transcript bands with copy/loop-play | ⏳ |
 

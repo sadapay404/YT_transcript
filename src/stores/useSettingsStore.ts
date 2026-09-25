@@ -7,7 +7,6 @@
  *  studio exactly how the user left it.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
@@ -17,10 +16,11 @@ import {
   LETTER_SPACING_RANGE,
   LINE_HEIGHT_RANGE,
   MEASURE_RANGE,
+  PREFERENCES_COOKIE,
   SIDEBAR_WIDTH_RANGE,
   THEMES,
-  STORAGE_KEYS,
 } from "@/lib/constants";
+import { preferencesStorage, resolvePreferences } from "@/lib/prefs";
 import type {
   AppSettings,
   FontFamilyId,
@@ -63,6 +63,18 @@ interface SettingsActions {
 }
 
 export type SettingsState = AppSettings & SettingsActions;
+
+/**
+ * `persist` hands back an already-parsed object; the shared resolver expects a
+ * string, so re-serialise in the shape it understands. Keeps ONE validation
+ * path for both the server (cookie header) and the client (store hydration).
+ */
+function serializeForMerge(persisted: unknown): string | undefined {
+  if (!persisted || typeof persisted !== "object") return undefined;
+  const record = persisted as Record<string, unknown>;
+  if ("state" in record) return JSON.stringify(record);
+  return JSON.stringify({ state: record });
+}
 
 /** Values only — used by `persist.partialize` so actions never hit storage. */
 function pickSettings(state: SettingsState): AppSettings {
@@ -179,54 +191,19 @@ export const useSettingsStore = create<SettingsState>()(
       resetAll: () => set({ ...DEFAULT_SETTINGS }),
     }),
     {
-      name: STORAGE_KEYS.settings,
+      name: PREFERENCES_COOKIE,
       version: 1,
-      storage: createJSONStorage(() => localStorage),
+      // Cookie-backed so the server can render the saved theme in the first
+      // paint (see src/lib/prefs.ts for the reasoning).
+      storage: createJSONStorage(() => preferencesStorage),
       partialize: pickSettings,
-      // Defensive merge: a stale/partial blob can never break the store.
-      merge: (persisted, current) => {
-        const saved = (persisted ?? {}) as Partial<AppSettings>;
-        return {
-          ...current,
-          ...saved,
-          typography: {
-            ...current.typography,
-            ...(saved.typography ?? {}),
-          },
-        };
-      },
+      // Defensive merge: a stale/hand-edited cookie can never break the store.
+      merge: (persisted, current) => ({
+        ...current,
+        ...resolvePreferences(serializeForMerge(persisted)),
+      }),
     },
   ),
 );
 
 /* ──────────────────────────── Convenience hooks ─────────────────────────── */
-
-/**
- * True once the persisted blob has been merged into the store.
- *
- * Implemented with `useSyncExternalStore` (instead of an effect + setState) so
- * React uses the server snapshot during hydration and swaps to the live value
- * right after — no cascading render, no hydration mismatch for components that
- * render a value derived from saved settings.
- */
-function subscribeHydration(onChange: () => void) {
-  const unsubFinish = useSettingsStore.persist.onFinishHydration(onChange);
-  const unsubRehydrate = useSettingsStore.persist.onHydrate(onChange);
-  return () => {
-    unsubFinish();
-    unsubRehydrate();
-  };
-}
-
-export function useSettingsHydrated(): boolean {
-  return useSyncExternalStore(
-    subscribeHydration,
-    () => useSettingsStore.persist.hasHydrated(),
-    () => false,
-  );
-}
-
-/** Selector shorthand so components don't subscribe to the whole store. */
-export const useTheme = () => useSettingsStore((s) => s.theme);
-export const useTypography = () => useSettingsStore((s) => s.typography);
-export const useViewMode = () => useSettingsStore((s) => s.viewMode);

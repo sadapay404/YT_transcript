@@ -108,7 +108,7 @@ function configCheck(): HealthCheck {
     meta: {
       model: getGeminiModel(),
       fallbackModel: getGeminiFallbackModel(),
-      demoMode: process.env.CADENCE_DEMO_MODE === "1",
+      demoMode: process.env.TRANSTUDIO_DEMO_MODE === "1",
       transcriptProxy: Boolean(process.env.TRANSCRIPT_PROXY_URL),
       contextLimitChars: GEMINI.maxContextCharacters,
     },

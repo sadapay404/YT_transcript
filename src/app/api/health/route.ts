@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     status: statusCodeFor(report),
     headers: {
       "cache-control": "no-store, max-age=0",
-      "x-cadence-health": report.ok ? "ok" : "degraded",
+      "x-transtudio-health": report.ok ? "ok" : "degraded",
     },
   });
 }

@@ -1,10 +1,10 @@
 import { AppShell } from "@/components/layout/AppShell";
-import { LandingView } from "@/components/landing/LandingView";
+import { Workspace } from "@/components/workspace/Workspace";
 
 export default function Home() {
   return (
     <AppShell>
-      <LandingView />
+      <Workspace />
     </AppShell>
   );
 }

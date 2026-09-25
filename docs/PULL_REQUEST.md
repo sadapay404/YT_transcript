@@ -1,11 +1,12 @@
-# Cadence — build progress (draft, merge when you want it live)
+# TranStudio — build progress (merge when you want it live)
 
-Tracks the step-by-step build of Cadence: a free-tier YouTube transcript, AI
-clipping and export studio (Next.js 16 + Gemini).
+Tracks the step-by-step build of TranStudio: a free-tier YouTube transcript reader,
+AI clipping and export studio (Next.js 16 + Gemini).
 
-> **Draft on purpose.** Every commit on this branch gets its own free Vercel
-> preview URL, so you can already use the app live without merging. Merge when
-> you're happy with the build — `main` becomes the production deployment.
+> Every commit on this branch gets its own free Vercel preview URL, so the app is
+> usable live before merging. Merge when you're happy — `main` becomes production.
+> (See *Deployment prerequisites* below — this repo's `main` is still the empty
+> initial commit, so merging is also what makes a normal Vercel deploy work.)
 
 ## Shipped
 
@@ -27,12 +28,43 @@ clipping and export studio (Next.js 16 + Gemini).
 - 38 network-free unit tests and GitHub Actions CI (typecheck → lint → test →
   build) with an empty environment.
 
+### Step 2 — the core engine (fetcher + player + transcript)
+- `extractTranscriptAction` server action → `fetchTranscriptForUrl()` pipeline:
+  URL validation → metadata (InnerTube, falling back to oEmbed) in parallel with
+  caption scraping (`youtube-transcript`) → millisecond/second normalisation with
+  a duration cross-check → a complete `TranscriptPayload`.
+- Raw **YouTube IFrame Player API** (no player dependency) with an imperative
+  `PlaybackController`, a 120ms clock publishing into a playback store, clip-loop
+  support ready for Step 5, tab-visibility pause, and mapped embed errors
+  (private / not embeddable / removed).
+- Studio workspace: URL bar with live validation, custom transport (scrub rail,
+  timecode, mute, "open on YouTube"), transcript rail with timestamp badges and
+  **click-any-line-to-seek**, three layout modes (Split / Cinema / Read) that
+  reflow without remounting the player, keyboard shortcuts
+  (`Space`, `J`/`L`, `1`/`2`/`3`), loading skeletons and a diagnostic error state.
+- Bundled **demo transcript** so the app is never a dead end: served when the
+  host cannot reach YouTube (sandboxes/CI), always labelled as a demo.
+- 76 unit tests total, including hermetic fetch-pipeline tests that mock the
+  network so they pass in every environment.
+
+### Cleanup + rebrand to TranStudio
+- Renamed the app to **TranStudio** (package, metadata, PWA manifest, docs).
+- Removed non-functional UI: "Free API key" button, disabled Export button,
+  placeholder settings button, and the entire marketing/landing surface
+  (feature grid, "Step N" chips, fake URL bar, preview widgets).
+- **Zen Paper is now the default theme**, and preferences persist in a **cookie**
+  (`transtudio.prefs`) instead of localStorage, so `layout.tsx` renders the saved
+  theme and typography in the first HTML response — no boot script, no flash.
+  Verified: `curl -H 'Cookie: transtudio.prefs=…'` returns
+  `<html data-theme="cyberpunk" data-scheme="dark">` server-side.
+- Light-theme (Zen Paper) contrast fixes with `scheme-light`/`scheme-dark`
+  variants; removed dead exports across `lib/` and the stores.
+
 ## Next
 
-- **Step 2** — `youtube-transcript` server action, YouTube IFrame player, raw transcript render.
-- **Step 3** — sync engine: auto-scroll, kinetic active line, click-to-seek.
+- **Step 3** — sync engine: auto-scroll follow (with resume), kinetic liquid highlight.
 - **Step 4** — Gemini chat sidebar with the transcript injected as context.
-- **Step 5** — viral clipper: structured JSON clips → colour-coded transcript bands with copy/loop-play.
+- **Step 5** — viral clipper: structured JSON clips → colour-coded transcript bands with copy/loop-play, plus the export menu.
 
 ## Deployment prerequisites (Vercel)
 

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 
 /* Self-hosted fonts — no Google Fonts request at runtime, no FOUT from a
    third-party origin, works on locked-down networks. */
@@ -10,12 +11,20 @@ import "@fontsource/opendyslexic/latin-700.css";
 
 import "./globals.css";
 
-import { APP_DESCRIPTION, APP_NAME, APP_SUBTITLE, APP_TAGLINE } from "@/lib/constants";
-import { THEME_BOOT_SCRIPT } from "@/lib/bootScript";
+import {
+  APP_DESCRIPTION,
+  APP_NAME,
+  APP_SUBTITLE,
+  APP_TAGLINE,
+  FONT_OPTIONS,
+  PREFERENCES_COOKIE,
+  THEMES,
+} from "@/lib/constants";
+import { resolvePreferences } from "@/lib/prefs";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://cadence.local"),
+  metadataBase: new URL("https://transtudio.local"),
   title: {
     default: `${APP_NAME} — ${APP_SUBTITLE}`,
     template: `%s · ${APP_NAME}`,
@@ -25,18 +34,18 @@ export const metadata: Metadata = {
   keywords: [
     "youtube transcript",
     "transcript extractor",
-    "viral clip finder",
-    "gemini ai",
+    "read youtube",
     "subtitle export",
     "srt",
     "vtt",
+    "transcript downloader",
   ],
-  authors: [{ name: `${APP_NAME} Studio` }],
+  authors: [{ name: APP_NAME }],
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     title: APP_NAME,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
   },
   openGraph: {
     type: "website",
@@ -64,13 +73,41 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+/**
+ * The layout is server-rendered *with the saved preferences*.
+ *
+ * Reading the preferences cookie here means `data-theme`, `data-scheme` and the
+ * Typography Studio variables are baked into the very first HTML response — so
+ * a returning visitor with Zen Paper saved never sees a flash of another theme,
+ * and no inline boot script is required.
+ */
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const cookieStore = await cookies();
+  const prefs = resolvePreferences(cookieStore.get(PREFERENCES_COOKIE)?.value);
+
+  const scheme =
+    THEMES.find((theme) => theme.id === prefs.theme)?.scheme ?? "light";
+  const fontStack =
+    FONT_OPTIONS.find((font) => font.id === prefs.typography.fontFamily)?.stack ??
+    FONT_OPTIONS[0].stack;
+
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        {/* Applies saved theme + typography before the first paint. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
-      </head>
+    <html
+      lang="en"
+      data-theme={prefs.theme}
+      data-scheme={scheme}
+      data-motion={prefs.reduceMotion ? "reduced" : "full"}
+      style={
+        {
+          "--transcript-font": fontStack,
+          "--transcript-size": `${prefs.typography.fontSize}rem`,
+          "--transcript-leading": String(prefs.typography.lineHeight),
+          "--transcript-tracking": `${prefs.typography.letterSpacing}em`,
+          "--transcript-measure": `${prefs.typography.measure}ch`,
+        } as React.CSSProperties
+      }
+      suppressHydrationWarning
+    >
       <body className="min-h-dvh bg-canvas text-ink antialiased">
         <ThemeProvider>{children}</ThemeProvider>
       </body>
