@@ -5,7 +5,7 @@
  * Validates locally (instant feedback, no round trip) and shows the demo escape
  * hatch whenever a fetch fails for environmental reasons.
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, ClipboardPaste, Link2, Loader2, Sparkles, X } from "lucide-react";
 
@@ -24,6 +24,19 @@ export function UrlBar({ autoFocus = false }: { autoFocus?: boolean }) {
 
   const [touched, setTouched] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  /* ── Autofocus, on pointers only ──────────────────────────────────────────
+   * The hero bar asks for focus so a link can be pasted straight away. On
+   * touch devices that would fling a keyboard over the landing the moment the
+   * page opens, so it is limited to fine pointers, and `preventScroll` keeps
+   * the page exactly where the visitor left it while the DOM settles. */
+  useEffect(() => {
+    if (!autoFocus) return;
+    const input = inputRef.current;
+    if (!input) return;
+    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+    input.focus({ preventScroll: true });
+  }, [autoFocus]);
 
   const trimmed = value.trim();
   const parsed = trimmed ? parseYouTubeUrl(trimmed) : null;
@@ -69,7 +82,6 @@ export function UrlBar({ autoFocus = false }: { autoFocus?: boolean }) {
         <input
           ref={inputRef}
           value={value}
-          autoFocus={autoFocus}
           spellCheck={false}
           inputMode="url"
           aria-label="YouTube video URL"
