@@ -60,6 +60,50 @@ AI clipping and export studio (Next.js 16 + Gemini).
 - Light-theme (Zen Paper) contrast fixes with `scheme-light`/`scheme-dark`
   variants; removed dead exports across `lib/` and the stores.
 
+### Fix — transcripts actually load for real videos
+
+`"No transcript found for every video"` was **not** the videos' fault:
+
+- YouTube decides *per client identity*. The WEB client answers datacenter IPs
+  with `LOGIN_REQUIRED — Sign in to confirm you're not a bot`, and hides caption
+  tracks even when the video plays.
+- `youtube-transcript@1.3.1` only understood classic `<text start="…">` XML. The
+  json3 / srv3 / WebVTT bodies YouTube actually serves were parsed as **zero
+  rows** and reported as "no captions" — a silent failure for 100% of videos.
+
+Replaced with a ladder that tries identities and says what it did:
+
+| # | Strategy | Notes |
+| - | -------- | ----- |
+| 1 | Innertube `WEB` → `ANDROID_VR` → `IOS` → `ANDROID` → `WEB_EMBEDDED_PLAYER` | each with its own API key, client id, version, User-Agent |
+| 2 | unsigned `api/timedtext` | manual tracks, no player round-trip |
+| 3 | watch-page `ytInitialPlayerResponse` | last-resort scrape |
+| 4 | `youtube-transcript`, then the demo transcript | demo **only** for environmental failures |
+
+- Caption bodies are parsed per format and each parser reports its own time unit
+  (json3/srv3 = ms, classic XML/WebVTT = s) — no ms/s guessing, no 1000× errors.
+- Word-level ASR events are rebuilt into readable lines; line-level tracks keep
+  YouTube's own granularity (Step 5's clip mapping depends on that).
+- Attributes are read separately from the tag regex, so an optional group can
+  never silently drop a duration again.
+- **Every attempt is visible**: the workspace error state lists *"What was tried
+  (N)"*, the transcript header shows the winning strategy, and `/status` reports
+  `strategy` + `attempts`. "No transcript" is never a silent verdict.
+- Whole-ladder time budget: a blocked host fails fast with an explanation.
+- `TRANSCRIPT_PROXY_URL` now covers **every** request (Innertube POSTs, signed
+  and unsigned `timedtext`, watch page) — previously only the library path.
+- Restored the **"Read it. Clip it. Ship it."** slogan as the animated
+  empty-state hero (decorative words `aria-hidden`, one `sr-only` copy).
+
+Verified end-to-end with a YouTube stand-in that bot-walls WEB exactly like the
+live site does (real HTTP, no mocks in the ladder):
+
+```text
+✗ innertube:web        — LOGIN_REQUIRED — Sign in to confirm you're not a bot
+✗ innertube:android-vr — LOGIN_REQUIRED
+✓ innertube:ios        — json3, 3 lines, lang=en (asr)     → captions rendered
+```
+
 ## Next
 
 - **Step 3** — sync engine: auto-scroll follow (with resume), kinetic liquid highlight.
@@ -93,9 +137,29 @@ Full diagnosis and the dashboard click-path live in
 ## Verification
 
 ```bash
-npm run test       # 38 tests
+npm run test       # 135 unit tests (+3 live integration tests, opt-in)
 npm run lint
 npm run typecheck
 npm run build && npm start
 # then open http://localhost:3000/status
+```
+
+### Verifying captions on the live deploy
+
+The caption probe names the identity that answered and every attempt it made:
+
+```bash
+curl -s "https://<your-app>.vercel.app/api/health?deep=1" | grep -A 20 youtube-captions
+```
+
+Expect `"status": "pass"` with a `strategy` and a `✓` line in `attempts`. If every
+line is `✗` with `LOGIN_REQUIRED`, that host's IP range is being challenged —
+set `TRANSCRIPT_PROXY_URL` (documented in `docs/DEPLOY.md`) and re-check. The
+studio keeps working meanwhile: it shows the bundled demo transcript **and says
+why**, instead of claiming the video has no captions.
+
+The integration suite can be run against any YouTube stand-in:
+
+```bash
+TRANSTUDIO_TEST_FAKE_YOUTUBE=http://127.0.0.1:4010/   ./node_modules/.bin/vitest run src/lib/youtube/pipeline.integration.test.ts
 ```
