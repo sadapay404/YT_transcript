@@ -86,6 +86,12 @@ export interface NormalizeOptions {
   language?: string;
   /** Known video length — enables the plausibility check below. */
   videoDurationSeconds?: number;
+  /**
+   * Trust the caller: our own parsers know the unit from the format they read
+   * (json3 and srv3 are milliseconds, classic XML and WebVTT are seconds).
+   * Detection is only used for third-party payloads of unknown origin.
+   */
+  forceUnit?: TimeUnit;
 }
 
 export interface NormalizedTranscript {
@@ -108,7 +114,7 @@ export function normalizeSegments(
   raw: RawTranscriptSegment[],
   options: NormalizeOptions = {},
 ): NormalizedTranscript {
-  let unit = detectTimeUnit(raw);
+  let unit = options.forceUnit ?? detectTimeUnit(raw);
   let rescaled = false;
   const rawEnd = raw.reduce(
     (max, segment) =>
@@ -119,7 +125,9 @@ export function normalizeSegments(
 
   // Self-heal: the player knows the true length, so if our guess implies a
   // video five times longer than reality, the unit was almost certainly wrong.
+  // Skipped when the caller stated the unit explicitly.
   if (
+    !options.forceUnit &&
     options.videoDurationSeconds &&
     options.videoDurationSeconds > 0 &&
     detectedDuration > options.videoDurationSeconds * 1.5

@@ -107,9 +107,12 @@ src/
 │  ├─ health.ts           # deployment diagnostics + self-tests
 │  ├─ gemini/client.ts    # Gemini client factory + error taxonomy (server only)
 │  └─ youtube/
-│     ├─ fetch.ts         # ⭐ the engine: scrape → normalise → payload (+ demo fallback)
+│     ├─ fetch.ts         # ⭐ the engine: strategy ladder → normalise → payload (+ demo fallback)
+│     ├─ captions.ts      # ⭐ multi-client caption ladder + per-attempt diagnostics (tested)
+│     ├─ clients.ts       # Innertube client identities, proxy fetcher, timedtext URLs (tested)
+│     ├─ parse.ts         # json3 / srv3 / classic-XML / WebVTT parsers, unit-exact (tested)
 │     ├─ metadata.ts      # title/author/duration/caption tracks (InnerTube → oEmbed)
-│     ├─ normalize.ts     # ms-vs-seconds detection + self-healing (tested)
+│     ├─ normalize.ts     # ms-vs-seconds handling, self-healing detection (tested)
 │     ├─ sync.ts          # playhead ↔ line maths: active line, scroll targets (tested)
 │     ├─ demo.ts          # bundled demo transcript (never a dead end)
 │     └─ probe.ts         # caption fetch probe + error classification
@@ -126,6 +129,32 @@ src/
    ├─ status/StatusDashboard.tsx
    └─ ui/                        # Segmented, Slider, Switch
 ```
+
+### Why captions never come back empty
+
+YouTube answers *per client identity*: the WEB client regularly hides caption
+tracks or returns `LOGIN_REQUIRED — Sign in to confirm you're not a bot` to
+datacenter IPs (Vercel, CI, containers), while another identity answers the same
+request perfectly. A single-identity scraper therefore reports "no captions" for
+*every* video on such a host.
+
+So the engine runs a ladder and reports what each rung did:
+
+1. **Innertube player** as `WEB` → `ANDROID_VR` → `IOS` → `ANDROID` → `WEB_EMBEDDED_PLAYER`,
+   each with its own API key, client id, version and User-Agent.
+2. **Unsigned `api/timedtext`** — manual tracks are often served with no player
+   round-trip at all.
+3. **Watch page** scrape (`ytInitialPlayerResponse`).
+4. **`youtube-transcript`** as a last resort, then the bundled demo transcript —
+   *only* when the failure is environmental, never to mask a real answer.
+
+Caption bodies arrive as json3, srv3, classic XML or WebVTT; each parser states
+its own time unit (json3/srv3 = ms, XML/VTT = s) instead of guessing, and the
+whole ladder runs under a time budget so a blocked host fails fast with an
+explanation instead of hanging.
+
+Every attempt is surfaced in the UI (*"What was tried (N)"*) and in
+`/status` (`Strategy`, `attempts`), so "no transcript" is never a silent verdict.
 
 ### Theming without re-renders
 

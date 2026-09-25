@@ -2,50 +2,57 @@
  * ─────────────────────────────────────────────────────────────────────────────
  *  The core engine — URL in, complete transcript payload out. SERVER ONLY.
  * ─────────────────────────────────────────────────────────────────────────────
- *  Pipeline:
- *    1. validate + parse the URL           (client and server share the parser)
- *    2. metadata in parallel with captions (InnerTube → oEmbed, both optional)
- *    3. scrape captions                    (youtube-transcript, no API key)
- *    4. normalise ms-vs-seconds + shape    (validated by the unit tests)
- *    5. on "cannot reach YouTube", optionally serve the demo transcript
+ *  Ladder (first success wins):
+ *    1. Our own multi-client caption fetcher (`captions.ts`) — understands every
+ *       format YouTube serves, and works from datacenter IPs where the WEB
+ *       client hides captions.
+ *    2. `youtube-transcript` — kept as a second opinion; it uses a different
+ *       code path and sometimes succeeds where we don't.
+ *    3. Demo transcript — ONLY when the failure is environmental (bot wall,
+ *       consent, rate limit, no network). Real problems (private, deleted,
+ *       captions disabled) are reported as errors, never masked.
  *
- *  Everything is timeout-guarded and every failure is classified into the app's
- *  error taxonomy, so the UI can always show something actionable.
+ *  Every attempt records a diagnostic line, which travels with the result so
+ *  the UI (and `/status`) can show exactly what happened.
  */
 import { YoutubeTranscript } from "youtube-transcript";
 
 import { GEMINI } from "@/lib/constants";
 import type {
   FetchTranscriptResult,
-  TranscriptErrorCode,
   TranscriptPayload,
   TranscriptSource,
 } from "@/lib/types";
 import { parseYouTubeUrl } from "@/lib/utils";
-import { buildDemoTranscript, DEMO_AUTHOR, DEMO_TITLE } from "@/lib/youtube/demo";
 import {
-  fetchVideoMetadata,
-  pickCaptionTrack,
-  type VideoMetadataResult,
-} from "@/lib/youtube/metadata";
+  fetchCaptionsDirect,
+  describeDiagnostics,
+  type Diagnostic,
+} from "@/lib/youtube/captions";
+import { proxiedFetcher } from "@/lib/youtube/clients";
+import { buildDemoTranscript, DEMO_AUTHOR, DEMO_TITLE } from "@/lib/youtube/demo";
+import { fetchVideoMetadata } from "@/lib/youtube/metadata";
 import { normalizeSegments } from "@/lib/youtube/normalize";
-import { classifyTranscriptError } from "@/lib/youtube/probe";
+import {
+  classifyTranscriptError,
+  type ClassifiedTranscriptError,
+} from "@/lib/youtube/probe";
 
 export interface FetchTranscriptOptions {
   /** Preferred caption language, e.g. "en". Falls back to what YouTube offers. */
   lang?: string;
-  /** Total budget for the whole operation. */
+  /** Budget per strategy. */
   timeoutMs?: number;
   /**
-   * When the network is unreachable (sandbox/CI/datacenter egress), return the
-   * demo transcript instead of a hard failure. Real errors — deleted video,
-   * captions disabled — are still reported as errors.
+   * When the failure is environmental (this host cannot reach YouTube), return
+   * the demo transcript instead of a hard failure.
    */
   allowDemoFallback?: boolean;
 }
 
-/** Constrain concurrent scraper calls (YouTube throttles bursts aggressively). */
-const MAX_CONCURRENT_SCRAPES = 2;
+/* ─────────────────────────── scraper concurrency ─────────────────────────── */
+
+const MAX_CONCURRENT_SCRAPES = 3;
 let inFlight = 0;
 const queue: Array<() => void> = [];
 
@@ -62,53 +69,19 @@ async function withScrapeSlot<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
-/**
- * Optional egress proxy for hosts whose IP range YouTube throttles.
- * `TRANSCRIPT_PROXY_URL` may be either a prefix (`https://proxy/`) or a URL
- * template containing `{url}`.
- */
-function makeProxyFetch(): typeof fetch | undefined {
-  const proxy = process.env.TRANSCRIPT_PROXY_URL?.trim();
-  if (!proxy) return undefined;
-
-  const rewrite = (input: RequestInfo | URL): string => {
-    const target = typeof input === "string" ? input : input.toString();
-    return proxy.includes("{url}")
-      ? proxy.replace("{url}", encodeURIComponent(target))
-      : `${proxy.replace(/\/$/, "")}/${target}`;
-  };
-
-  return ((input: RequestInfo | URL, init?: RequestInit) =>
-    fetch(rewrite(input), init)) as typeof fetch;
-}
-
-/** Wrap a fetch so it always carries an abort signal (Scraper can hang). */
+/** The library path uses the same proxy as our own fetcher, plus a timeout. */
 function timedFetch(signal: AbortSignal): typeof fetch {
-  const base = makeProxyFetch() ?? fetch;
+  const base = proxiedFetcher() ?? fetch;
   return ((input: RequestInfo | URL, init?: RequestInit) =>
     base(input, { ...init, signal })) as typeof fetch;
 }
 
-/**
- * Last-resort metadata when every YouTube endpoint is unreachable. Shaped like
- * a full result so `Promise.all` keeps a single, predictable type.
- */
-function minimalMetadata(videoId: string): VideoMetadataResult {
-  return {
-    videoId,
-    url: `https://www.youtube.com/watch?v=${videoId}`,
-    title: "",
-    author: "",
-    thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-    durationSeconds: 0,
-    captionTracks: [],
-    hasOnlyAutoCaptions: false,
-    resolvedBy: "fallback",
-  };
-}
+/* ────────────────────────────── result shapes ───────────────────────────── */
 
-function demoResult(reason: string): FetchTranscriptResult {
+function demoResult(reason: string, diagnostics: Diagnostic[]): FetchTranscriptResult {
   const demo = buildDemoTranscript();
+  const lines = describeDiagnostics(diagnostics);
+
   return {
     ok: true,
     transcript: demo,
@@ -120,24 +93,59 @@ function demoResult(reason: string): FetchTranscriptResult {
       thumbnailUrl: "",
       durationSeconds: demo.durationSeconds,
     },
-    // Surfaced so the UI can explain *why* this isn't the requested video.
-    notice: reason,
+    notice:
+      `${reason} This host cannot load YouTube captions right now, so a built-in demo ` +
+      `transcript is shown instead — reading, seeking and exporting all still work.`,
+    ...(lines.length > 0 ? { diagnostics: lines } : {}),
   };
 }
 
+function payloadFrom(args: {
+  videoId: string;
+  url: string;
+  language: string;
+  languageLabel: string;
+  isAutoGenerated: boolean;
+  source: TranscriptSource;
+  strategy?: string;
+  segments: TranscriptPayload["segments"];
+  text: string;
+  wordCount: number;
+  characterCount: number;
+  durationSeconds: number;
+}): TranscriptPayload {
+  const payload: TranscriptPayload = {
+    videoId: args.videoId,
+    url: args.url,
+    language: args.language,
+    languageLabel: args.languageLabel,
+    isAutoGenerated: args.isAutoGenerated,
+    source: args.source,
+    segments: args.segments,
+    text: args.text,
+    wordCount: args.wordCount,
+    characterCount: args.characterCount,
+    durationSeconds: args.durationSeconds,
+    fetchedAt: new Date().toISOString(),
+  };
+  if (args.strategy) payload.strategy = args.strategy;
+  return payload;
+}
+
+/* ─────────────────────────────── entry point ────────────────────────────── */
+
 /**
  * Fetch a full transcript for a video URL or id.
- * This is the only entry point Step 2's UI (and later steps' export/clip code)
- * needs; it never throws.
+ * Never throws — every outcome is a typed result.
  */
 export async function fetchTranscriptForUrl(
   input: string,
   options: FetchTranscriptOptions = {},
 ): Promise<FetchTranscriptResult> {
-  const totalBudget = options.timeoutMs ?? 20_000;
+  const perStrategyTimeout = options.timeoutMs ?? 9_000;
   const allowDemoFallback = options.allowDemoFallback ?? true;
 
-  // ── 1. Parse ─────────────────────────────────────────────────────────────
+  // ── 1. Validate ──────────────────────────────────────────────────────────
   const parsed = parseYouTubeUrl(input);
   if (!parsed) {
     return {
@@ -148,113 +156,245 @@ export async function fetchTranscriptForUrl(
     };
   }
 
-  // Explicit demo mode beats any network call.
   if (process.env.TRANSTUDIO_DEMO_MODE === "1") {
-    return demoResult("TRANSTUDIO_DEMO_MODE is enabled.");
+    return demoResult("TRANSTUDIO_DEMO_MODE is enabled.", []);
   }
 
+  const diagnostics: Diagnostic[] = [];
+
+  /* ── 2. Primary: our own multi-client fetcher ─────────────────────────── */
+  try {
+    const direct = await fetchCaptionsDirect(parsed.videoId, {
+      ...(options.lang ? { lang: options.lang } : {}),
+      timeoutMs: perStrategyTimeout,
+      ...(proxiedFetcher() ? { fetcher: proxiedFetcher() } : {}),
+    });
+    diagnostics.push(...direct.diagnostics);
+
+    if (direct.ok) {
+      // The player response usually carries title/author/duration, so we only
+      // make an extra metadata call when something is missing.
+      let title = direct.title ?? "";
+      let author = direct.author ?? "";
+      let durationSeconds = direct.durationSeconds ?? 0;
+      let thumbnailUrl = `https://i.ytimg.com/vi/${parsed.videoId}/hqdefault.jpg`;
+
+      if (!title) {
+        const metadata = await fetchVideoMetadata(parsed.videoId, {
+          timeoutMs: 6_000,
+        }).catch(() => null);
+        if (metadata) {
+          title = metadata.title;
+          author = author || metadata.author;
+          durationSeconds = durationSeconds || metadata.durationSeconds;
+          thumbnailUrl = metadata.thumbnailUrl || thumbnailUrl;
+        }
+      }
+
+      const text = direct.segments.map((segment) => segment.text).join(" ");
+      const transcript = payloadFrom({
+        videoId: parsed.videoId,
+        url: `https://www.youtube.com/watch?v=${parsed.videoId}`,
+        language: direct.language,
+        languageLabel: direct.languageLabel,
+        isAutoGenerated: direct.isAutoGenerated,
+        source: "youtube-transcript",
+        strategy: direct.strategy,
+        segments: direct.segments,
+        text,
+        wordCount: text ? text.split(/\s+/).length : 0,
+        characterCount: text.length,
+        durationSeconds: direct.segments.at(-1)?.end ?? 0,
+      });
+
+      warnIfTooLong(transcript);
+
+      return {
+        ok: true,
+        transcript,
+        metadata: {
+          videoId: parsed.videoId,
+          url: transcript.url,
+          title,
+          author,
+          thumbnailUrl,
+          durationSeconds: durationSeconds || transcript.durationSeconds,
+          ...(parsed.startAt ? { startAt: parsed.startAt } : {}),
+        },
+        diagnostics: describeDiagnostics(diagnostics),
+      };
+    }
+  } catch (error) {
+    diagnostics.push({
+      strategy: "direct",
+      ok: false,
+      detail: error instanceof Error ? error.message : "unexpected error",
+    });
+  }
+
+  /* ── 3. Secondary: the youtube-transcript library ─────────────────────── */
+  const library = await tryLibrary(parsed.videoId, options, diagnostics);
+  if (library.kind === "ok") {
+    warnIfTooLong(library.payload);
+    const metadata = await fetchVideoMetadata(parsed.videoId, {
+      timeoutMs: 6_000,
+    }).catch(() => null);
+
+    return {
+      ok: true,
+      transcript: library.payload,
+      metadata: {
+        videoId: parsed.videoId,
+        url: library.payload.url,
+        title: metadata?.title ?? "",
+        author: metadata?.author ?? "",
+        thumbnailUrl:
+          metadata?.thumbnailUrl ?? `https://i.ytimg.com/vi/${parsed.videoId}/hqdefault.jpg`,
+        durationSeconds: metadata?.durationSeconds || library.payload.durationSeconds,
+        ...(parsed.startAt ? { startAt: parsed.startAt } : {}),
+      },
+      diagnostics: describeDiagnostics(diagnostics),
+    };
+  }
+
+  /* ── 4. Give up — but say exactly why ────────────────────────────────── */
+  const environmental = isEnvironmental(diagnostics);
+  if (environmental && allowDemoFallback) {
+    return demoResult("YouTube blocked caption requests from this server.", diagnostics);
+  }
+
+  const verdict = diagnostics.find((entry) =>
+    /unavailable|private|age-restricted|not playable/i.test(entry.detail),
+  );
+
+  // Prefer the library's precise verdict when it has one: "captions disabled"
+  // and "video unavailable" deserve their own message, not a generic failure.
+  const specific = library.classified;
+  const useSpecific = specific && specific.code !== "unknown" && !environmental;
+
+  return {
+    ok: false,
+    error: useSpecific
+      ? specific.code
+      : verdict
+        ? "not-found"
+        : environmental
+          ? "blocked"
+          : "empty",
+    message: useSpecific
+      ? specific.message
+      : verdict
+        ? "YouTube says this video can't be played here."
+        : environmental
+          ? "This server couldn't reach YouTube's caption service."
+          : "No captions could be read for this video.",
+    hint: useSpecific
+      ? specific.hint
+      : environmental
+        ? "Datacenter IPs are often challenged by YouTube. Set TRANSCRIPT_PROXY_URL, deploy somewhere with a normal egress, or try again in a minute."
+        : "The video may have captions disabled, or only auto-captions that YouTube hasn't generated yet. Try another video, or load the demo transcript.",
+    videoId: parsed.videoId,
+    diagnostics: describeDiagnostics(diagnostics),
+  };
+}
+
+/* ───────────────────────────── library path ─────────────────────────────── */
+
+type LibraryAttempt =
+  | { kind: "ok"; payload: TranscriptPayload }
+  | { kind: "error"; classified?: ClassifiedTranscriptError };
+
+async function tryLibrary(
+  videoId: string,
+  options: FetchTranscriptOptions,
+  diagnostics: Diagnostic[],
+): Promise<LibraryAttempt> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), totalBudget);
+  const timer = setTimeout(() => controller.abort(), (options.timeoutMs ?? 9_000) * 2);
 
   try {
-    // ── 2. Metadata and captions run concurrently ───────────────────────────
-    const metadataPromise = fetchVideoMetadata(parsed.videoId, {
-      timeoutMs: Math.min(9_000, totalBudget),
-      signal: controller.signal,
-    });
-
-    const captionsPromise = withScrapeSlot(() =>
-      YoutubeTranscript.fetchTranscript(parsed.videoId, {
+    const raw = await withScrapeSlot(() =>
+      YoutubeTranscript.fetchTranscript(videoId, {
         ...(options.lang ? { lang: options.lang } : {}),
         fetch: timedFetch(controller.signal),
       }),
     );
 
-    const [metadata, rawCaptions] = await Promise.all([
-      metadataPromise.catch(() => minimalMetadata(parsed.videoId)),
-      captionsPromise,
-    ]);
+    const normalized = normalizeSegments(raw ?? []);
+    if (normalized.segments.length === 0) {
+      diagnostics.push({
+        strategy: "youtube-transcript",
+        ok: false,
+        detail: `returned ${raw?.length ?? 0} rows, none usable`,
+      });
+      return { kind: "error" };
+    }
 
-    // ── 3. Normalise (handles ms-vs-seconds and the cross-check) ────────────
-    const preferredTrack = pickCaptionTrack(metadata.captionTracks, options.lang);
-    const normalized = normalizeSegments(rawCaptions, {
-      videoDurationSeconds: metadata.durationSeconds || undefined,
+    diagnostics.push({
+      strategy: "youtube-transcript",
+      ok: true,
+      detail: `${normalized.unit} detected, ${normalized.segments.length} lines`,
     });
 
-    if (normalized.segments.length === 0) {
-      return {
-        ok: false,
-        error: "empty",
-        message: "This video has no readable captions.",
-        hint: "Try a video with subtitles, or load the demo transcript to explore the app.",
-        videoId: parsed.videoId,
-      };
-    }
-
-    const language = preferredTrack?.languageCode ?? rawCaptions[0]?.lang ?? "en";
-    const source: TranscriptSource = "youtube-transcript";
-
-    const transcript: TranscriptPayload = {
-      videoId: parsed.videoId,
-      url: metadata.url || parsed.url,
-      language,
-      languageLabel:
-        preferredTrack?.name ??
-        (metadata.hasOnlyAutoCaptions ? `${language} (auto-generated)` : language),
-      isAutoGenerated: preferredTrack?.kind === "asr",
-      source,
-      segments: normalized.segments,
-      text: normalized.text,
-      wordCount: normalized.wordCount,
-      characterCount: normalized.characterCount,
-      durationSeconds: normalized.durationSeconds,
-      fetchedAt: new Date().toISOString(),
-    };
-
-    // Guard rail for the Gemini step: keep the payload within a sane context.
-    if (transcript.characterCount > GEMINI.maxContextCharacters) {
-      // Trimming happens in Step 4's prompt builder; log for now so it is
-      // visible during development rather than silently truncated.
-      console.warn(
-        `[transtudio] transcript is ${transcript.characterCount} chars (limit ${GEMINI.maxContextCharacters}) — the AI context will be chunked.`,
-      );
-    }
-
-    const durationSeconds =
-      metadata.durationSeconds || transcript.durationSeconds;
-
     return {
-      ok: true,
-      transcript,
-      metadata: {
-        videoId: parsed.videoId,
-        url: transcript.url,
-        title: metadata.title,
-        author: metadata.author,
-        thumbnailUrl: metadata.thumbnailUrl,
-        durationSeconds,
-        ...(parsed.startAt ? { startAt: parsed.startAt } : {}),
-      },
+      kind: "ok",
+      payload: payloadFrom({
+        videoId,
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        language: raw?.[0]?.lang ?? "en",
+        languageLabel: raw?.[0]?.lang ?? "en",
+        isAutoGenerated: false,
+        source: "youtube-transcript",
+        strategy: "youtube-transcript",
+        segments: normalized.segments,
+        text: normalized.text,
+        wordCount: normalized.wordCount,
+        characterCount: normalized.characterCount,
+        durationSeconds: normalized.durationSeconds,
+      }),
     };
   } catch (error) {
     const classified = classifyTranscriptError(error);
-
-    // A blocked/absent network is an environment problem, not a user problem —
-    // show the demo so the app stays usable and say so honestly.
-    const environmentFailure =
-      classified.code === "blocked" || classified.code === "network";
-    if (environmentFailure && allowDemoFallback) {
-      return demoResult(classified.message);
-    }
-
-    return {
+    diagnostics.push({
+      strategy: "youtube-transcript",
       ok: false,
-      error: classified.code as TranscriptErrorCode,
-      message: classified.message,
-      hint: classified.hint,
-      videoId: parsed.videoId,
-    };
+      detail: `${classified.code}: ${classified.message}`,
+    });
+    return { kind: "error", classified };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/* ─────────────────────────────── helpers ───────────────────────────────── */
+
+function isEnvironmental(diagnostics: Diagnostic[]): boolean {
+  if (diagnostics.length === 0) return true;
+  const signals = [
+    "not a bot",
+    "sign in",
+    "login_required",
+    "consent",
+    "too many",
+    "rate limit",
+    "429",
+    "blocked",
+    "enotfound",
+    "fetch failed",
+    "network",
+    "http 5",
+    "0 caption tracks",
+    "captions not exposed",
+  ];
+  return diagnostics.every((entry) =>
+    entry.ok ? true : signals.some((signal) => entry.detail.toLowerCase().includes(signal)),
+  );
+}
+
+function warnIfTooLong(transcript: TranscriptPayload) {
+  if (transcript.characterCount > GEMINI.maxContextCharacters) {
+    console.warn(
+      `[transtudio] transcript is ${transcript.characterCount} chars (limit ${GEMINI.maxContextCharacters}) — the AI context will be chunked in Step 4.`,
+    );
   }
 }

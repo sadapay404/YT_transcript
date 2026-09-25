@@ -20,6 +20,8 @@ export interface TranscriptError {
   code: TranscriptErrorCode;
   message: string;
   hint?: string;
+  /** Per-strategy attempt log — shown behind a "technical details" toggle. */
+  diagnostics?: string[];
 }
 
 interface TranscriptState {
@@ -31,6 +33,8 @@ interface TranscriptState {
   error: TranscriptError | null;
   /** Set when the server had to substitute the demo transcript. */
   notice: string | null;
+  /** Attempt log for the loaded transcript (success or failure). */
+  diagnostics: string[];
   /** Non-blocking metadata warnings surfaced under the player. */
   lastFetchedAt: number | null;
 
@@ -49,6 +53,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
   metadata: null,
   error: null,
   notice: null,
+  diagnostics: [],
   lastFetchedAt: null,
 
   setInput: (input) => set({ input }),
@@ -62,6 +67,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       input: trimmed,
       error: null,
       notice: null,
+      diagnostics: [],
       // Keep the previous transcript visible while loading so the layout
       // doesn't collapse and re-flow on every fetch.
     });
@@ -92,7 +98,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
   },
 
   loadDemo: async () => {
-    set({ status: "loading", error: null, notice: null });
+    set({ status: "loading", error: null, notice: null, diagnostics: [] });
     try {
       const result = await loadDemoTranscriptAction();
       applyResult(result, set);
@@ -115,6 +121,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       metadata: null,
       error: null,
       notice: null,
+      diagnostics: [],
       lastFetchedAt: null,
     }),
 }));
@@ -129,6 +136,7 @@ function applyResult(result: FetchTranscriptResult, set: Setter) {
       metadata: result.metadata,
       error: null,
       notice: result.notice ?? null,
+      diagnostics: result.diagnostics ?? [],
       lastFetchedAt: Date.now(),
     });
     return;
@@ -139,10 +147,12 @@ function applyResult(result: FetchTranscriptResult, set: Setter) {
     transcript: null,
     metadata: null,
     notice: null,
+    diagnostics: result.diagnostics ?? [],
     error: {
       code: result.error,
       message: result.message,
-      hint: result.hint,
+      ...(result.hint ? { hint: result.hint } : {}),
+      ...(result.diagnostics ? { diagnostics: result.diagnostics } : {}),
     },
   });
 }

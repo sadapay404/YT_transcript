@@ -246,12 +246,41 @@ redeploy).
 | Symptom | Cause | Fix |
 | ------- | ----- | --- |
 | `/status` says `GEMINI_API_KEY is not set` on the live site | Variable added after the deployment, or only for one environment | Add it to **all** environments, then **Redeploy** |
-| Captions: `too-many-requests` | YouTube throttling your host's IP range | Retry in a few minutes; set `TRANSCRIPT_PROXY_URL`; or move to another host |
-| Captions: `blocked` / `ENOTFOUND` | Host/sandbox has no outbound access to youtube.com | Deploy to Vercel, or run locally. In the browser the app automatically falls back to its bundled demo transcript and says so — reading, seeking and exporting stay usable |
+| Captions: `blocked` / `too-many-requests` | YouTube challenged every client identity, or your host's IP range is throttled | Open `/status?deep=1` and read the **captions** check: it names the identity that answered and lists every attempt. Re-check in a few minutes, set `TRANSCRIPT_PROXY_URL`, or move host. The studio falls back to the bundled demo transcript *and says so* rather than pretending the video has no captions |
+| Captions: `empty` / `disabled` | A genuine answer about that video | YouTube reports the video's captions as disabled, or none exist yet. Try another video |
 | Gemini: `invalid-key` | Placeholder text, quotes or whitespace copied with the key | Re-paste just the key; regenerate if unsure |
 | Gemini: `quota` | Free-tier rate limit | Wait ~60s, or set `GEMINI_MODEL=gemini-2.5-flash-lite` |
 | Build fails on install | Host forcing a package name with capitals | The repo's `package.json` name is `transtudio`, so any project name is fine |
 | Blank page after deploy | Stale build cache | **Deployments → ⋯ → Redeploy** with "Clear cache" |
+
+### "No transcript found for every video"
+
+That is a host/identity problem, not a video problem, and it is what the
+multi-client ladder exists to fix. Check it in 10 seconds:
+
+```bash
+curl -s "https://<your-app>.vercel.app/api/health?deep=1" | grep -A 20 youtube-captions
+```
+
+Read the `attempts` field. Two shapes are possible:
+
+```text
+✗ innertube:web     — LOGIN_REQUIRED — Sign in to confirm you're not a bot
+✓ innertube:ios     — json3, 412 lines, lang=en        ← working (ladder recovered)
+```
+
+```text
+✗ innertube:web     — LOGIN_REQUIRED — Sign in to confirm you're not a bot
+✗ innertube:android-vr — LOGIN_REQUIRED …
+✗ timedtext:unsigned — en: empty; en(asr): empty
+✗ watch-page        — consent/bot page returned (no player response in HTML)
+```
+
+The second shape means your host's whole IP range is currently challenged. The
+studio still works — it shows the bundled demo transcript and explains why — but
+for live captions set `TRANSCRIPT_PROXY_URL` (it is applied to *every* request:
+Innertube POSTs, signed and unsigned `timedtext`, and the watch page) or deploy
+somewhere with a residential-grade egress.
 
 ## Environment variables (all optional except the first)
 

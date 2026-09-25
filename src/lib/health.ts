@@ -211,13 +211,22 @@ async function captionsCheck(video: string): Promise<HealthCheck> {
       status: "pass",
       detail: `Fetched ${result.segmentCount} caption lines${
         result.language ? ` (${result.language})` : ""
-      } in ${result.latencyMs}ms.`,
+      } in ${result.latencyMs}ms via ${result.strategy ?? "the caption API"}.`,
       latencyMs: result.latencyMs,
       meta: {
         videoId: result.videoId,
         segmentCount: result.segmentCount,
         timeUnit: result.timeUnit ?? "unknown",
         durationSeconds: Math.round(result.durationSeconds ?? 0),
+        ...(result.strategy ? { strategy: result.strategy } : {}),
+        ...(result.format ? { format: result.format } : {}),
+        ...(result.sample ? { sample: result.sample.slice(0, 120) } : {}),
+        // Which identities were tried before this one succeeded — the whole
+        // point of the ladder is that a blocked identity is not a dead end.
+        attempted: result.diagnostics.length,
+        ...(result.diagnostics.length > 0
+          ? { attempts: result.diagnostics.join(" · ").slice(0, 600) }
+          : {}),
       },
     };
   }
@@ -231,7 +240,15 @@ async function captionsCheck(video: string): Promise<HealthCheck> {
       : "Unknown failure.",
     ...(result.error?.hint ? { hint: result.error.hint } : {}),
     latencyMs: result.latencyMs,
-    meta: { videoId: result.videoId || video, requested: video },
+    meta: {
+      videoId: result.videoId || video,
+      requested: video,
+      ...(result.strategy ? { strategy: result.strategy } : {}),
+      attempted: result.diagnostics.length,
+      ...(result.diagnostics.length > 0
+        ? { attempts: result.diagnostics.join(" · ").slice(0, 600) }
+        : {}),
+    },
   };
 }
 

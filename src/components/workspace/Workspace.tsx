@@ -11,8 +11,9 @@
  */
 import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, ArrowRight, Info, Keyboard } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronRight, Info, Keyboard } from "lucide-react";
 
+import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { UrlBar } from "@/components/workspace/UrlBar";
 import { TranscriptPane } from "@/components/workspace/TranscriptPane";
@@ -94,6 +95,7 @@ export function Workspace() {
             message={error.message}
             hint={error.hint}
             code={error.code}
+            diagnostics={error.diagnostics}
             onDemo={() => void loadDemo()}
           />
         ) : (
@@ -220,11 +222,13 @@ function ErrorState({
   message,
   hint,
   code,
+  diagnostics,
   onDemo,
 }: {
   message: string;
   hint?: string;
   code: string;
+  diagnostics?: string[];
   onDemo: () => void;
 }) {
   return (
@@ -249,6 +253,24 @@ function ErrorState({
           </p>
         )}
         <p className="mt-2 font-mono text-[10.5px] text-ink-faint">code: {code}</p>
+
+        {/* Exactly what was tried, and what each attempt said. This is what
+            turns "no transcript found" into an actionable report. */}
+        {diagnostics && diagnostics.length > 0 && (
+          <details className="group mt-2.5">
+            <summary className="flex cursor-pointer items-center gap-1 text-[11.5px] text-ink-faint transition-colors hover:text-ink-soft">
+              <ChevronRight className="h-3 w-3 transition-transform group-open:rotate-90" />
+              What was tried ({diagnostics.length})
+            </summary>
+            <ul className="mt-1.5 flex flex-col gap-1 rounded-lg border border-line bg-ink/[0.04] px-2.5 py-2 font-mono text-[10.5px] leading-relaxed text-ink-soft">
+              {diagnostics.map((line, index) => (
+                <li key={`${line}-${index}`} className="break-words">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -307,6 +329,9 @@ function LoadingState() {
   );
 }
 
+/** The three-beat slogan, split so each word can animate on its own beat. */
+const SLOGAN_WORDS = APP_TAGLINE.split(" ");
+
 function EmptyState() {
   return (
     <motion.div
@@ -315,17 +340,46 @@ function EmptyState() {
       exit={{ opacity: 0 }}
       className="grid flex-1 place-items-center pb-6"
     >
-      <div className="max-w-xl text-center">
-        <p className="font-mono text-[10px] tracking-[0.22em] text-accent uppercase">
-          Ready when you are
-        </p>
-        <h2 className="mt-3 text-2xl font-black tracking-tight text-ink sm:text-3xl">
-          Paste a link. Read the video.
-        </h2>
-        <p className="mx-auto mt-3 max-w-md text-[13.5px] leading-relaxed text-ink-soft">
-          TranStudio pulls the captions out of any public YouTube video, lays them out
-          as something you can actually read, and lets you click any line to jump
-          straight to that moment.
+      <div className="max-w-2xl text-center">
+        <motion.p
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="chip chip-accent"
+        >
+          {APP_NAME} · Transcript &amp; Clip Studio
+        </motion.p>
+
+        {/* Kinetic typography: the slogan itself, resolving out of a blur.
+            The animated words are decorative for assistive tech — the plain
+            copy below carries the real heading text, so nothing is announced
+            twice. */}
+        <h1 className="mt-5 text-4xl leading-[1.05] font-black tracking-tight sm:text-5xl lg:text-6xl">
+          <span aria-hidden="true">
+            {SLOGAN_WORDS.map((word, index) => (
+              <motion.span
+                key={`${word}-${index}`}
+                initial={{ opacity: 0, y: 24, filter: "blur(12px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                transition={{
+                  delay: 0.08 * index,
+                  duration: 0.7,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+                className={cn(
+                  "mr-[0.28em] inline-block",
+                  index % 2 === 1 ? "text-gradient" : "text-ink",
+                )}
+              >
+                {word}
+              </motion.span>
+            ))}
+          </span>
+          <span className="sr-only">{APP_TAGLINE}</span>
+        </h1>
+        <p className="mx-auto mt-4 max-w-lg text-[14px] leading-relaxed text-ink-soft">
+          Paste a link and TranStudio pulls the captions out of any public YouTube
+          video, lays them out as something you can actually read, and lets you click
+          any line to jump straight to that moment.
         </p>
         <ul className="mx-auto mt-5 flex max-w-sm flex-col gap-1.5 text-left text-[12.5px] text-ink-soft">
           {[

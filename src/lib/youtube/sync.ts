@@ -20,6 +20,11 @@ import type { TranscriptSegment } from "@/lib/types";
  * not merely its own `offset + duration` — because YouTube leaves gaps between
  * captions (and sometimes zeros the duration). Using the next offset as the
  * boundary means the highlight never blinks off mid-sentence.
+ *
+ * `-1` is deliberate for the lead-in: auto-generated tracks commonly start at
+ * ~0.2s, and some videos open with music, so for those opening moments no line
+ * is genuinely being spoken and the pane should not pretend otherwise. Callers
+ * must treat -1 as "no active line yet".
  */
 export function findActiveSegmentIndex(
   segments: TranscriptSegment[],
