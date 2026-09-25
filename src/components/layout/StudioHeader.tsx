@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { AudioLines, PanelRight } from "lucide-react";
+import { Activity, AudioLines, Download, PanelRight, Settings2 } from "lucide-react";
 
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { StylePanel } from "@/components/layout/StylePanel";
@@ -12,11 +12,12 @@ import { useSettingsStore } from "@/stores/useSettingsStore";
 
 /**
  * Sticky application chrome — deliberately thin (56px) so the player and the
- * transcript rail get every available pixel. Only working controls live here.
+ * transcript rail get every available pixel.
  */
 export function StudioHeader() {
   const sidebarOpen = useSettingsStore((s) => s.sidebarOpen);
   const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
+  const exportReady = false; // Step 5 wires the export menu in.
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-canvas/72 backdrop-blur-xl backdrop-saturate-150">
@@ -50,10 +51,28 @@ export function StudioHeader() {
 
         <div className="flex-1" />
 
-        {/* ── Actions: theme, style studio, assistant panel ─────────────── */}
+        {/* ── Actions ───────────────────────────────────────────────────── */}
         <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            disabled={!exportReady}
+            title="Export transcript (Step 5)"
+            className="btn hidden h-9 gap-2 border border-line px-2.5 sm:flex"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span className="text-[12.5px]">Export</span>
+          </button>
+
           <ThemeSwitcher />
           <StylePanel />
+
+          <Link
+            href="/status"
+            title="System status & diagnostics"
+            className="btn btn-icon h-9 w-9 border border-line"
+          >
+            <Activity className="h-4 w-4" />
+          </Link>
 
           <button
             type="button"
@@ -63,6 +82,14 @@ export function StudioHeader() {
             className="btn btn-icon h-9 w-9 border border-line"
           >
             <PanelRight className="h-4 w-4" />
+          </button>
+
+          <button
+            type="button"
+            title="Studio settings (Step 3)"
+            className="btn btn-icon hidden h-9 w-9 border border-line sm:inline-flex"
+          >
+            <Settings2 className="h-4 w-4" />
           </button>
         </div>
       </div>

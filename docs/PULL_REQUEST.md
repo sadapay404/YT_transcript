@@ -49,9 +49,12 @@ AI clipping and export studio (Next.js 16 + Gemini).
 
 ### Cleanup + rebrand to TranStudio
 - Renamed the app to **TranStudio** (package, metadata, PWA manifest, docs).
-- Removed non-functional UI: "Free API key" button, disabled Export button,
-  placeholder settings button, and the entire marketing/landing surface
-  (feature grid, "Step N" chips, fake URL bar, preview widgets).
+- Removed the non-functional "Free API key" button and the placeholder
+  scaffolding that advertised work not yet done ("Step 2 preview", "Step 1
+  shipped…"). The landing surface itself — hero, view-mode preview, theme
+  gallery, typography studio, clip palette, feature grid — was restored at the
+  owner's request and now sits above the working studio on `/`; its fake URL bar
+  is the real `UrlBar`, so pasting a link there loads the transcript below.
 - **Zen Paper is now the default theme**, and preferences persist in a **cookie**
   (`transtudio.prefs`) instead of localStorage, so `layout.tsx` renders the saved
   theme and typography in the first HTML response — no boot script, no flash.
@@ -59,6 +62,25 @@ AI clipping and export studio (Next.js 16 + Gemini).
   `<html data-theme="cyberpunk" data-scheme="dark">` server-side.
 - Light-theme (Zen Paper) contrast fixes with `scheme-light`/`scheme-dark`
   variants; removed dead exports across `lib/` and the stores.
+
+### Restored — the landing UI, one-to-one, minus the API-key button
+
+The previous landing screen is back on `/` byte-for-byte where it matters:
+hero ("Read it. Clip it. Ship it."), Fluid panes (live view-mode preview),
+Four complete themes, Typography studio, 16-tint clip palette, and the six-card
+feature grid. The deleted components were restored from the earlier commit and
+verified identical by hash.
+
+Two deliberate differences, both required by the merge:
+
+- The hero's fake URL bar is now the **real** `UrlBar` — same panel, same width
+  (`max-w-2xl`), same icon and Extract button — so a link pasted at the top
+  loads an actual transcript.
+- The "Get a free Gemini API key" header button stays removed, as asked.
+
+The studio now renders *below* the landing and stays unmounted until something
+is being read; when a link is pasted in the hero it glides into view. Empty
+state, slogan and URL bar live on the landing, so there is exactly one of each.
 
 ### Fix — transcripts actually load for real videos
 

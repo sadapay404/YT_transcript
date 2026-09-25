@@ -6,6 +6,23 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+/**
+ * Should a freshly-mounted studio scroll itself into view?
+ *
+ * The home page stacks the landing first and the studio below it, so a link
+ * pasted in the hero mounts the studio off-screen. Anything already comfortably
+ * visible (or a zero-height viewport, as in tests) is left alone — yanking the
+ * page while the visitor can already see the pane is worse than doing nothing.
+ */
+export function shouldPullIntoView(
+  rect: { top: number; bottom: number },
+  viewportHeight: number,
+): boolean {
+  if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) return false;
+  if (!Number.isFinite(rect.top) || !Number.isFinite(rect.bottom)) return false;
+  return !(rect.top < viewportHeight * 0.6 && rect.bottom > 0);
+}
+
 /** Tailwind-aware `class` joiner (last-write-wins on conflicting utilities). */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

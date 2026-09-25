@@ -10,6 +10,7 @@ import {
   parseYouTubeUrl,
   readingMinutes,
   round,
+  shouldPullIntoView,
   slugify,
   toSrtTimecode,
   toVttTimecode,
@@ -144,5 +145,39 @@ describe("misc helpers", () => {
       "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
     );
     expect(youtubeThumbnail("dQw4w9WgXcQ", "max")).toContain("maxresdefault");
+  });
+});
+
+describe("shouldPullIntoView", () => {
+  /**
+   * The home page stacks the landing above the studio, so a link pasted in the
+   * hero can mount the studio far off-screen. This decides whether to bring it
+   * into view — the bug it guards against is the studio never scrolling at all
+   * (the effect fired while the studio was still rendering null).
+   */
+  const viewport = 900;
+
+  it("pulls the studio up when it mounted below the fold", () => {
+    expect(shouldPullIntoView({ top: 1150, bottom: 1500 }, viewport)).toBe(true);
+    expect(shouldPullIntoView({ top: 3000, bottom: 3400 }, viewport)).toBe(true);
+  });
+
+  it("pulls the studio up when it mounted above the viewport", () => {
+    expect(shouldPullIntoView({ top: -600, bottom: -100 }, viewport)).toBe(true);
+    expect(shouldPullIntoView({ top: -400, bottom: -1 }, viewport)).toBe(true);
+  });
+
+  it("leaves an already-visible studio where it is", () => {
+    expect(shouldPullIntoView({ top: 100, bottom: 800 }, viewport)).toBe(false);
+    expect(shouldPullIntoView({ top: 0, bottom: 900 }, viewport)).toBe(false);
+    // Straddles the 60% line but is genuinely on screen.
+    expect(shouldPullIntoView({ top: 500, bottom: 1600 }, viewport)).toBe(false);
+  });
+
+  it("does nothing without a measurable viewport", () => {
+    expect(shouldPullIntoView({ top: 1000, bottom: 1400 }, 0)).toBe(false);
+    expect(shouldPullIntoView({ top: 1000, bottom: 1400 }, -1)).toBe(false);
+    expect(shouldPullIntoView({ top: 1000, bottom: 1400 }, Number.NaN)).toBe(false);
+    expect(shouldPullIntoView({ top: Number.NaN, bottom: 10 }, viewport)).toBe(false);
   });
 });

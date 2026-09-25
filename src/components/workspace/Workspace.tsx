@@ -9,12 +9,11 @@
  *  smoothly and — crucially — never remounts the player (no reloaded video,
  *  no lost playback position).
  */
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, ArrowRight, ChevronRight, Info, Keyboard } from "lucide-react";
 
-import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { cn, shouldPullIntoView } from "@/lib/utils";
 import { UrlBar } from "@/components/workspace/UrlBar";
 import { TranscriptPane } from "@/components/workspace/TranscriptPane";
 import { VideoPane } from "@/components/workspace/VideoPane";
@@ -36,8 +35,33 @@ export function Workspace() {
   const togglePlay = usePlaybackStore((s) => s.togglePlay);
   const controller = usePlaybackStore((s) => s.controller);
 
+  const rootRef = useRef<HTMLDivElement>(null);
+
   const hasTranscript = Boolean(transcript && transcript.segments.length > 0);
   const readingOnly = viewMode === "read";
+
+  /** False while the studio renders nothing — the landing owns that state. */
+  const mounted = status !== "idle" || hasTranscript;
+  const pulledIntoView = useRef(false);
+
+  /* ── Glide into view ──────────────────────────────────────────────────────
+   * The landing sits above the studio, so a link pasted in the hero mounts the
+   * studio off-screen. Pull it into view once, on its first appearance — the
+   * effect has to key off `mounted`, because the node it scrolls to does not
+   * exist yet while the studio is still rendering null. */
+  useEffect(() => {
+    if (!mounted || pulledIntoView.current) return;
+
+    const element = rootRef.current;
+    if (!element) return;
+    pulledIntoView.current = true;
+
+    const rect = element.getBoundingClientRect();
+    if (!shouldPullIntoView(rect, window.innerHeight)) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    element.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  }, [mounted]);
 
   /* ── Keyboard shortcuts (only when the reader isn't typing) ───────────── */
   useEffect(() => {
@@ -67,11 +91,17 @@ export function Workspace() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [controller, togglePlay]);
 
+  // Nothing to show until something is being read: the landing page above owns
+  // the empty state, the slogan and the URL bar.
+  if (!mounted) return null;
+
   return (
-    <div className="mx-auto flex w-full max-w-[1900px] flex-1 flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4">
+    <div
+      ref={rootRef}
+      className="mx-auto flex w-full max-w-[1900px] flex-1 scroll-mt-16 flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4">
       {/* ── Input row ───────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-2">
-        <UrlBar autoFocus={!hasTranscript} />
+        <UrlBar />
       </div>
 
       {/* ── Notices ─────────────────────────────────────────────────────── */}
@@ -85,9 +115,7 @@ export function Workspace() {
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
       <AnimatePresence mode="wait" initial={false}>
-        {status === "idle" && !hasTranscript ? (
-          <EmptyState key="empty" />
-        ) : status === "loading" && !hasTranscript ? (
+        {status === "loading" && !hasTranscript ? (
           <LoadingState key="loading" />
         ) : status === "error" && error ? (
           <ErrorState
@@ -324,76 +352,6 @@ function LoadingState() {
         <p className="mt-auto text-[12px] text-ink-faint">
           Fetching captions…
         </p>
-      </div>
-    </motion.div>
-  );
-}
-
-/** The three-beat slogan, split so each word can animate on its own beat. */
-const SLOGAN_WORDS = APP_TAGLINE.split(" ");
-
-function EmptyState() {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      className="grid flex-1 place-items-center pb-6"
-    >
-      <div className="max-w-2xl text-center">
-        <motion.p
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="chip chip-accent"
-        >
-          {APP_NAME} · Transcript &amp; Clip Studio
-        </motion.p>
-
-        {/* Kinetic typography: the slogan itself, resolving out of a blur.
-            The animated words are decorative for assistive tech — the plain
-            copy below carries the real heading text, so nothing is announced
-            twice. */}
-        <h1 className="mt-5 text-4xl leading-[1.05] font-black tracking-tight sm:text-5xl lg:text-6xl">
-          <span aria-hidden="true">
-            {SLOGAN_WORDS.map((word, index) => (
-              <motion.span
-                key={`${word}-${index}`}
-                initial={{ opacity: 0, y: 24, filter: "blur(12px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                transition={{
-                  delay: 0.08 * index,
-                  duration: 0.7,
-                  ease: [0.22, 1, 0.36, 1],
-                }}
-                className={cn(
-                  "mr-[0.28em] inline-block",
-                  index % 2 === 1 ? "text-gradient" : "text-ink",
-                )}
-              >
-                {word}
-              </motion.span>
-            ))}
-          </span>
-          <span className="sr-only">{APP_TAGLINE}</span>
-        </h1>
-        <p className="mx-auto mt-4 max-w-lg text-[14px] leading-relaxed text-ink-soft">
-          Paste a link and TranStudio pulls the captions out of any public YouTube
-          video, lays them out as something you can actually read, and lets you click
-          any line to jump straight to that moment.
-        </p>
-        <ul className="mx-auto mt-5 flex max-w-sm flex-col gap-1.5 text-left text-[12.5px] text-ink-soft">
-          {[
-            "No API key, no account, nothing to install",
-            "Click a sentence to seek — the rail follows the audio",
-            "Adjust typeface, size and line length to taste",
-            "Export to txt, Markdown, SRT or VTT",
-          ].map((item) => (
-            <li key={item} className="flex items-start gap-2">
-              <span className="mt-[0.45em] h-1 w-1 shrink-0 rounded-full bg-accent" />
-              {item}
-            </li>
-          ))}
-        </ul>
       </div>
     </motion.div>
   );
