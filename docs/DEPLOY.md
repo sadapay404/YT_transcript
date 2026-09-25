@@ -35,6 +35,14 @@ functions are all detected automatically. The Hobby plan is free and permanent.
 2. **Create API key** → copy it. No billing, no card.
 3. Keep it out of Git. Never paste it into a chat, an issue or a commit.
 
+> **Read this before importing.** Vercel detects the framework **once, at
+> import time**, and saves the result in the project settings forever. If you
+> import while your default branch has no `package.json`, it saves the preset as
+> `Other` and every build fails with *"No entrypoint found in /vercel/path0"*.
+> Always do **Step B first** (get the app code onto the branch you deploy) —
+> and this repo's `vercel.json` now pins the Next.js builder so even a
+> mis-imported project recovers. Details in [Troubleshooting](#troubleshooting).
+
 ### 2. Import the repository
 
 1. Sign in at <https://vercel.com> with **Continue with GitHub**.
@@ -63,11 +71,19 @@ Hit **Deploy**. First build takes ~1–2 minutes. Afterwards:
   <https://vercel.com> → your project → **Deployments** and click the newest
   preview to see the current build live *before* merging anything.
 
-### 5. Point production at the right branch (optional)
+### 5. Point production at the right branch — **required in this repo**
 
-**Settings → Git → Production Branch**. Set it to `main` and merge the pull
-request when you're happy, or set it to the `arena/…` branch to promote that
-branch as-is.
+Vercel's **Production Branch** defaults to `main`, and **this repo's `main` is
+still only the initial README commit** — all the app code lives on
+`arena/01a0d624-yt-transcript`. So pick one:
+
+- **Merge PR #1** (fast-forward, no conflicts) → `main` gets the app, and the
+  default production flow works from then on. Recommended.
+- **Or** **Settings → Git → Production Branch → `arena/01a0d624-yt-transcript`**
+  → that branch becomes the live site, nothing merged.
+
+Either way, **every branch already gets a preview URL**, so you can use the app
+live right now from the branch deployment regardless of this setting.
 
 ### 6. Update the variable without redeploying from scratch
 
@@ -161,6 +177,71 @@ missing key.
 ---
 
 ## Troubleshooting
+
+### "No entrypoint found in /vercel/path0. Set package.json `main` to a server file, or add one of: app.js, app.cjs, … src/app.ts …"
+
+**Do not add an `app.js`/`server.js` file** — that message is a symptom, not the
+problem. It means Vercel is running its *generic Node* builder instead of the
+Next.js builder. Two things cause it, and a fresh project typically has both:
+
+1. **The project's Framework Preset is `Other` (a.k.a. Node).**
+   Vercel detects the framework **once, at import**, and stores the result as a
+   project setting. If the repo was imported while the default branch held only
+   a README, detection found no `package.json` and permanently saved `Other`.
+2. **The deployed branch has no application code.**
+   This repo's `main` branch is still the one-line initial README commit — all
+   of the app lives on the `arena/01a0d624-yt-transcript` branch. Vercel's
+   **Production Branch** defaults to `main`, so it clones an empty project.
+
+#### Confirm it in 10 seconds
+
+Open **Deployments → the failed deployment → Source**. Check the commit:
+
+| Commit shown | Meaning | Fix |
+| ------------ | ------- | --- |
+| `1cbd757 Initial commit` | You're building the empty `main` branch | Do **step B** below |
+| Latest `arena/…` commit (e.g. `f0c6d54`) | Builder is wrong, code is fine | Do **step A** below |
+
+#### Step A — force the Next.js builder (already done in this repo)
+
+This repository now ships a `vercel.json`:
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build"
+}
+```
+
+The `"framework": "nextjs"` pin **overrides the saved project setting**, so
+import order stops mattering and a re-import can't get it wrong either. If your
+project was created before this file existed, you can either redeploy after
+pulling it, or fix it by hand:
+
+**Project → Settings → General → Build & Development Settings → Framework Preset → `Next.js`**, then **Root Directory** must be **empty** (not `src`, not `/`).
+
+#### Step B — give the deployed branch the app code (pick one)
+
+- **Merge the pull request (recommended).** PR #1 merges
+  `arena/01a0d624-yt-transcript` → `main`. It is a fast-forward (no conflicts),
+  so `main` gains the whole app and the normal production flow just works.
+- **Or change the production branch.** **Settings → Git → Production
+  Branch → `arena/01a0d624-yt-transcript`**. Nothing gets merged, and that
+  branch becomes your live site. Useful if you want the site live *before*
+  deciding to merge.
+- **Or start clean.** Delete the Vercel project and re-import now that the code
+  is on `main` — detection then nails Next.js on the first try.
+
+Then hit **Deployments → ⋯ → Redeploy** (env var changes also require a
+redeploy).
+
+> Why this can't be fixed from inside the app: Vercel decides *how to build*
+> from project settings and branch contents before your code ever runs. Nothing
+> in `next.config.ts` can influence it.
+
+### Other symptoms
 
 | Symptom | Cause | Fix |
 | ------- | ----- | --- |

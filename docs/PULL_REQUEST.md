@@ -34,6 +34,30 @@ clipping and export studio (Next.js 16 + Gemini).
 - **Step 4** — Gemini chat sidebar with the transcript injected as context.
 - **Step 5** — viral clipper: structured JSON clips → colour-coded transcript bands with copy/loop-play.
 
+## Deployment prerequisites (Vercel)
+
+Vercel detects the framework **once, at import**, and stores it as a project
+setting — this repo was imported while `main` still held only the initial
+README, so the project's preset was saved as `Other`. That produces:
+
+```
+No entrypoint found in "/vercel/path0". Set package.json "main" to a server file…
+```
+
+Two fixes, both included/applied from here:
+
+1. **`vercel.json` pins `"framework": "nextjs"`** — overrides the saved project
+   setting, so the Next.js builder always runs regardless of import order.
+   (`installCommand: npm ci`, `buildCommand: npm run build`, `engines.node: 22.x`.)
+2. **Merging this PR puts the app on `main`.** This branch is a fast-forward
+   from `main`, so the merge is clean and conflict-free — after which the
+   default production flow builds real code instead of an empty README.
+   Alternative: set **Settings → Git → Production Branch** to
+   `arena/01a0d624-yt-transcript` and skip the merge entirely.
+
+Full diagnosis and the dashboard click-path live in
+[`docs/DEPLOY.md`](../docs/DEPLOY.md#troubleshooting).
+
 ## Verification
 
 ```bash

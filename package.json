@@ -38,5 +38,8 @@
     "typescript": "^5",
     "vitest": "^5.0.1"
   },
-  "description": "Cadence \u2014 YouTube transcript, AI clipping and export studio (Next.js + Gemini, free tier)"
+  "description": "Cadence \u2014 YouTube transcript, AI clipping and export studio (Next.js + Gemini, free tier)",
+  "engines": {
+    "node": "22.x"
+  }
 }
