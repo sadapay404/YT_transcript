@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { AudioLines, Download, PanelRight, Settings2, Sparkles } from "lucide-react";
+import {
+  Activity,
+  AudioLines,
+  Download,
+  PanelRight,
+  Settings2,
+  Sparkles,
+} from "lucide-react";
 
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { ThemeSwitcher } from "@/components/layout/ThemeSwitcher";
@@ -74,6 +81,14 @@ export function StudioHeader() {
           </a>
 
           <ThemeSwitcher />
+
+          <Link
+            href="/status"
+            title="System status & diagnostics"
+            className="btn btn-icon h-9 w-9 border border-line"
+          >
+            <Activity className="h-4 w-4" />
+          </Link>
 
           <button
             type="button"

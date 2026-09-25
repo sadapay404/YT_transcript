@@ -9,6 +9,30 @@ Turn any YouTube video into a **synchronized, readable transcript**, then let **
 
 ---
 
+
+## Deploy it as a free website (5 minutes)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsadapay404%2FYT_transcript&env=GEMINI_API_KEY&envDescription=Free%20key%20from%20aistudio.google.com%2Fapikey%20%E2%80%94%20no%20credit%20card&envLink=https%3A%2F%2Faistudio.google.com%2Fapikey&project-name=cadence&repository-name=cadence)
+
+1. Push to GitHub (done), then import the repo at <https://vercel.com/new>.
+2. Add `GEMINI_API_KEY` in **Settings → Environment Variables** (free key, no card).
+3. Deploy → you get `https://<project>.vercel.app`.
+
+**Then verify it**: open **`/status`** on the live URL. It probes the runtime that
+is actually serving your traffic — API key presence, a live YouTube caption
+scrape, a live Gemini call, and a deterministic self-test of the timestamp
+normaliser — and prints the exact fix for anything that fails.
+
+```bash
+curl -s  https://your-app.vercel.app/api/health          | jq   # shallow, no network
+curl -s "https://your-app.vercel.app/api/health?deep=1"  | jq   # live probes
+```
+
+Full walkthrough (Vercel, Netlify, Cloudflare, CLI, domains, troubleshooting):
+**[docs/DEPLOY.md](docs/DEPLOY.md)**.
+
+---
+
 ## Quick start
 
 ```bash
@@ -22,10 +46,12 @@ cp .env.example .env.local
 # 3) run
 npm run dev            # http://localhost:3000
 
-# useful
+# verify
 npm run typecheck      # next typegen + tsc --noEmit
 npm run lint
+npm run test           # vitest: URL parsing, timestamp normalising, timecodes
 npm run build && npm start
+# then open http://localhost:3000/status  ← live diagnostics dashboard
 ```
 
 If you are scaffolding this project from scratch, the exact command used was:
@@ -68,12 +94,19 @@ src/
 │  ├─ globals.css         # ⭐ the whole design system (themes, tokens, components)
 │  ├─ manifest.ts         # PWA manifest
 │  ├─ icon.png            # PWA / favicon icon
-│  └─ page.tsx            # studio entry (Step 2 replaces the landing view)
+│  ├─ page.tsx            # studio entry (Step 2 replaces the landing view)
+│  ├─ status/page.tsx     # ⭐ diagnostics dashboard (is it working?)
+│  └─ api/health/route.ts # shallow + deep health JSON (monitor-friendly)
 ├─ lib/
 │  ├─ types.ts            # ⭐ every shared contract (transcript, chat, clips, exports…)
 │  ├─ constants.ts        # themes, font options, clip palette, export presets, Gemini config
 │  ├─ utils.ts            # timecodes, URL parsing, formatters
-│  └─ bootScript.ts       # pre-paint theme/typography hydration (no flash)
+│  ├─ health.ts           # deployment diagnostics + self-tests
+│  ├─ bootScript.ts       # pre-paint theme/typography hydration (no flash)
+│  ├─ gemini/client.ts    # Gemini client factory + error taxonomy (server only)
+│  └─ youtube/
+│     ├─ normalize.ts     # ⭐ ms-vs-seconds detection + self-healing (tested)
+│     └─ probe.ts         # caption fetch probe + error classification
 ├─ providers/
 │  └─ ThemeProvider.tsx   # settings → <html> data-attributes + CSS variables
 ├─ stores/

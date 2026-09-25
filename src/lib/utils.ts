@@ -17,10 +17,13 @@ export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-/** Round to a given number of decimals without float noise. */
+/** Round to a given number of decimals — via exponential notation, so
+ *  `round(1.005, 2)` is `1.01` rather than `1` (float-drift safe). */
 export function round(value: number, decimals = 2) {
-  const factor = 10 ** decimals;
-  return Math.round(value * factor) / factor;
+  if (!Number.isFinite(value)) return value;
+  const shifted = Number(`${value}e${decimals}`);
+  if (Number.isNaN(shifted)) return value;
+  return Number(`${Math.round(shifted)}e-${decimals}`);
 }
 
 export function uid(prefix = "id") {
@@ -213,10 +216,19 @@ export function parseYouTubeUrl(input: string): ParsedVideo | null {
   return parsed;
 }
 
-/** `90`, `90s`, `1m30s`, `1h2m3s` → seconds. */
+/**
+ * `90`, `90s`, `1m30s`, `1h2m3s` → seconds.
+ * Zero/negative values return `undefined`: `?t=0` means "from the start", which
+ * is the same as no deep link, so callers can skip seeking entirely.
+ */
 export function parseTimeParam(value: string | null): number | undefined {
   if (!value) return undefined;
-  if (/^\d+$/.test(value)) return Number(value);
+
+  if (/^\d+$/.test(value)) {
+    const seconds = Number(value);
+    return seconds > 0 ? seconds : undefined;
+  }
+
   const match = value.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/i);
   if (!match) return undefined;
   const [, h, m, s] = match;
