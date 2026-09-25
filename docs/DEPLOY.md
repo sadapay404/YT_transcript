@@ -245,13 +245,46 @@ redeploy).
 
 | Symptom | Cause | Fix |
 | ------- | ----- | --- |
-| `/status` says `GEMINI_API_KEY is not set` on the live site | Variable added after the deployment, or only for one environment | Add it to **all** environments, then **Redeploy** |
+| `/status` says `GEMINI_API_KEY is not set` on the live site | **Scope or timing.** Vercel only injects a variable into the environments you ticked, and only into deployments created *after* you saved it | Set the variable for **All Environments** (a Production-only variable is *not* passed to Preview deployments), then **Redeploy**. The report now names the scope it detected: `environment.deployment.vercelEnv`, plus `deployedRef`/`deployedSha` so you can see which build you are looking at |
+| The whole app is missing on the production URL | The Production deployment is built from `main`, which in this repo is still the initial commit (no app code) | Merge the PR (or point Settings → Git → Production Branch at the branch you want), then redeploy |
 | Captions: `blocked` / `too-many-requests` | YouTube challenged every client identity, or your host's IP range is throttled | Open `/status?deep=1` and read the **captions** check: it names the identity that answered and lists every attempt. Re-check in a few minutes, set `TRANSCRIPT_PROXY_URL`, or move host. The studio falls back to the bundled demo transcript *and says so* rather than pretending the video has no captions |
 | Captions: `empty` / `disabled` | A genuine answer about that video | YouTube reports the video's captions as disabled, or none exist yet. Try another video |
 | Gemini: `invalid-key` | Placeholder text, quotes or whitespace copied with the key | Re-paste just the key; regenerate if unsure |
 | Gemini: `quota` | Free-tier rate limit | Wait ~60s, or set `GEMINI_MODEL=gemini-2.5-flash-lite` |
 | Build fails on install | Host forcing a package name with capitals | The repo's `package.json` name is `transtudio`, so any project name is fine |
 | Blank page after deploy | Stale build cache | **Deployments → ⋯ → Redeploy** with "Clear cache" |
+
+### "I added GEMINI_API_KEY but the site says it is not set"
+
+Almost always **scope**, not a typo. Three things to check, in order:
+
+1. **Which environment is your URL?** Vercel deployments come in flavours and each
+   has its own variable set:
+
+   | URL | Environment | Gets Production-scoped vars? |
+   | --- | ----------- | ---------------------------- |
+   | `your-app.vercel.app` | Production | yes |
+   | `your-app-git-<branch>-….vercel.app` | Preview | **no** |
+   | `your-app-<hash>-….vercel.app` | Preview | **no** |
+
+   If the variable's tag says **Production** and you are opening a `-git-` preview
+   URL (which is every deployment of a branch), the key is simply not there.
+   Fix: edit the variable → set it for **All Environments** (or add a Preview copy).
+
+2. **Was it saved before the build?** Environment changes only reach deployments
+   created afterwards. **Deployments → ⋯ → Redeploy** (no code change needed).
+
+3. **Ask the app.** `/api/health` now reports exactly where it is running:
+
+   ```bash
+   curl -s "https://<your-app>/api/health" | jq '.environment.deployment, .warnings'
+   ```
+
+   ```json
+   { "vercelEnv": "preview", "commitRef": "feature-x", "commitSha": "a9b7dfe" }
+   ```
+
+   `vercelEnv: "preview"` with the key scoped to Production is the whole bug.
 
 ### "No transcript found for every video"
 

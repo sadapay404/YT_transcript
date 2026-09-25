@@ -59,6 +59,8 @@ export interface HealthReport {
     runtime: "vercel" | "netlify" | "cloudflare" | "local" | "unknown";
     /** True when outbound HTTPS is likely restricted (heuristic for sandboxes). */
     sandboxLikely: boolean;
+    /** Which deployment this is (Vercel only) — scope of its env vars. */
+    deployment: DeploymentContext;
   };
   checks: HealthCheck[];
   warnings: string[];
@@ -91,8 +93,77 @@ function detectSandbox(): boolean {
   );
 }
 
+/**
+ * Where is this build actually running?
+ *
+ * Vercel bakes the environment into each deployment: a variable scoped to
+ * *Production* is simply not present in a *Preview* deployment. Without that
+ * context a missing key looks like a mystery, so the report carries it.
+ */
+export interface DeploymentContext {
+  /** `production` | `preview` | `development` on Vercel, else null. */
+  vercelEnv: string | null;
+  /** Branch (or tag) the deployment was built from. */
+  commitRef: string | null;
+  /** Short commit SHA the deployment was built from. */
+  commitSha: string | null;
+  /** The deployment's own hostname. */
+  url: string | null;
+  deploymentId: string | null;
+}
+
+export function readDeploymentContext(
+  env: Record<string, string | undefined> = process.env,
+): DeploymentContext {
+  return {
+    vercelEnv: env.VERCEL_ENV?.trim() || null,
+    commitRef: env.VERCEL_GIT_COMMIT_REF?.trim() || null,
+    commitSha: env.VERCEL_GIT_COMMIT_SHA?.trim().slice(0, 7) || null,
+    url: env.VERCEL_URL?.trim() || null,
+    deploymentId: env.VERCEL_DEPLOYMENT_ID?.trim() || null,
+  };
+}
+
+/**
+ * Why isn't GEMINI_API_KEY visible here, and what exactly fixes it?
+ *
+ * The single most common cause is not a typo — it is scope. Vercel only
+ * injects a variable into the environments you selected, and only into
+ * deployments created *after* you saved it. Both facts are invisible from the
+ * outside, which is why this explains the specific case rather than saying
+ * "the key is not set".
+ */
+export function geminiKeyHint(deployment: DeploymentContext): string {
+  switch (deployment.vercelEnv) {
+    case "preview":
+      return (
+        "This is a Preview deployment. Variables scoped to Production are not " +
+        "passed to Preview deployments — set GEMINI_API_KEY for Preview (or All " +
+        "Environments) in Vercel, then Redeploy: environment changes only reach " +
+        "deployments created after you save them."
+      );
+    case "production":
+      return (
+        "This is the Production deployment. Set GEMINI_API_KEY for Production, " +
+        "then Redeploy — Vercel bakes the environment into each deployment, so a " +
+        "deployment keeps whatever it was built with."
+      );
+    case "development":
+      return (
+        "Add GEMINI_API_KEY to .env.local (or run `vercel env pull`), then restart " +
+        "the dev server."
+      );
+    default:
+      return (
+        "Add GEMINI_API_KEY to .env.local locally, or to your host's environment " +
+        "variables, then redeploy/restart so the running process picks it up."
+      );
+  }
+}
+
 function configCheck(): HealthCheck {
   const configured = isGeminiConfigured();
+  const deployment = readDeploymentContext();
   return {
     id: "gemini-key",
     label: "Gemini API key",
@@ -103,7 +174,9 @@ function configCheck(): HealthCheck {
     ...(configured
       ? {}
       : {
-          hint: "Get a free key at https://aistudio.google.com/apikey, then add GEMINI_API_KEY to .env.local (locally) or to your host's environment variables (production), and redeploy.",
+          hint:
+            "Get a free key at https://aistudio.google.com/apikey. " +
+            geminiKeyHint(deployment),
         }),
     meta: {
       model: getGeminiModel(),
@@ -111,6 +184,9 @@ function configCheck(): HealthCheck {
       demoMode: process.env.TRANSTUDIO_DEMO_MODE === "1",
       transcriptProxy: Boolean(process.env.TRANSCRIPT_PROXY_URL),
       contextLimitChars: GEMINI.maxContextCharacters,
+      ...(deployment.vercelEnv ? { vercelEnv: deployment.vercelEnv } : {}),
+      ...(deployment.commitRef ? { deployedRef: deployment.commitRef } : {}),
+      ...(deployment.commitSha ? { deployedSha: deployment.commitSha } : {}),
     },
   };
 }
@@ -281,7 +357,12 @@ export async function buildHealthReport(
   const sandboxLikely = detectSandbox();
 
   if (!isGeminiConfigured()) {
-    warnings.push("GEMINI_API_KEY is not configured — AI features are disabled.");
+    const deployment = readDeploymentContext();
+    warnings.push(
+      `GEMINI_API_KEY is not configured for this deployment${
+        deployment.vercelEnv ? ` (Vercel env: ${deployment.vercelEnv})` : ""
+      } — AI features are disabled. ${geminiKeyHint(deployment)}`,
+    );
   }
   for (const check of checks) {
     if (check.status === "fail" && sandboxLikely) {
@@ -303,6 +384,7 @@ export async function buildHealthReport(
       process.env.VERCEL_REGION ?? process.env.AWS_REGION ?? process.env.FLY_REGION ?? null,
     runtime: detectRuntime(),
     sandboxLikely,
+    deployment: readDeploymentContext(),
   };
 
   return {
