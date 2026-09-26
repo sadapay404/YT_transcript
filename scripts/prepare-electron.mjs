@@ -1,4 +1,4 @@
-import { access, cp, lstat, mkdir, readdir, realpath, rm, stat } from "node:fs/promises";
+import { access, cp, mkdir, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
