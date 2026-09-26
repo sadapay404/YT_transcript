@@ -40,7 +40,7 @@ export function LandingView() {
           className="mt-5 max-w-2xl text-[15px] leading-relaxed text-ink-soft"
         >
           Paste a YouTube link and get a synced, searchable transcript you can
-          actually read — then let Gemini hunt the viral moments and paint them
+          actually read — then let NexAI hunt the viral moments and paint them
           straight onto the text. Free forever, no API quotas, no sign-up.
         </motion.p>
 

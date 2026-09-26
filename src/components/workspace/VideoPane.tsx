@@ -171,7 +171,7 @@ export function VideoPane({ className }: { className?: string }) {
             <RotateCcw className="h-3.5 w-3.5" />
           </button>
 
-          <span className="font-mono text-[11.5px] text-ink-soft tabular-nums">
+          <span className="min-w-0 truncate whitespace-nowrap font-mono text-[11.5px] text-ink-soft tabular-nums">
             <span className="text-ink">{formatTimestamp(currentTime, effectiveDuration >= 3600)}</span>
             <span className="text-ink-faint">
               {" / "}

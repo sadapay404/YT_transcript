@@ -249,6 +249,7 @@ export function Workspace() {
 
                   {/* Title block */}
                   <div
+                    data-cinema-title={theater ? "" : undefined}
                     className={cn(
                       "flex items-start justify-between gap-3 border-t border-line px-3 py-2.5",
                       theater && "items-center py-2",

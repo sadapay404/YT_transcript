@@ -970,6 +970,24 @@ html[data-theater] .app-shell {
 html[data-theater] [data-landing] {
   display: none;
 }
+/* Every pixel goes to the video + transcript in theater: the reassurance
+   line under the URL bar is hidden (the paste link stays). */
+html[data-theater] [data-url-hint] {
+  display: none;
+}
+/* Unlayered on purpose: the title row carries Tailwind's `flex` utility,
+   which would out-rank a rule inside `@layer components`. */
+@container cinema (max-height: 32rem) {
+  [data-cinema-title] {
+    display: none;
+  }
+  [data-viral-clips-bar] {
+    padding-block: 0.3rem;
+  }
+  [data-viral-clips-bar] > button {
+    height: 2rem;
+  }
+}
 
 @layer components {
   .cinema-stage {
@@ -979,7 +997,9 @@ html[data-theater] [data-landing] {
     /* Transport + title bar under the video, and the gap to the transcript. */
     --cinema-chrome: 8.75rem;
     /* The transcript always keeps at least this much room at full size. */
-    --cinema-peek: clamp(8rem, 28cqh, 15rem);
+    /* (Header + the viral-clips bar take ~6.5rem of it, so the reading
+       area itself never collapses on short or phone-sized windows.) */
+    --cinema-peek: clamp(10.5rem, 30cqh, 16rem);
   }
 
   .cinema-player {
@@ -997,6 +1017,15 @@ html[data-theater] [data-landing] {
     width: min(100%, calc(var(--cinema-h) * 16 / 9));
     max-width: 100%;
     transition: width 110ms linear;
+  }
+  /* Short windows (720p laptops, phones): drop the title row under the
+     video — scrolling the transcript still resizes it — and hand that room
+     to the video and the reading area instead. */
+  @container cinema (max-height: 32rem) {
+    .cinema-player {
+      --cinema-chrome: 5.75rem;
+      --cinema-peek: 10.5rem;
+    }
   }
   .cinema-stage[data-cinema-animate] .cinema-player {
     transition: width 380ms var(--ease-liquid);
