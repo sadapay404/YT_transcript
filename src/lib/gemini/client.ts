@@ -65,9 +65,10 @@ export function markGeminiModelUnavailable(model: string): void {
 export function getGeminiModel(): string {
   const configured = process.env.GEMINI_MODEL?.trim();
   if (configured && !refusedModels.has(configured)) return configured;
-  if (discoveredModel && !refusedModels.has(discoveredModel)) return discoveredModel;
+  if (discoveredModel && !refusedModels.has(discoveredModel))
+    return discoveredModel;
   return process.env.GEMINI_MODEL?.trim()
-    ? GEMINI.modelFallbacks.find((model) => !refusedModels.has(model)) || GEMINI.defaultModel
+    ? getGeminiFallbackModel()
     : GEMINI.defaultModel;
 }
 
@@ -114,24 +115,39 @@ export function extractRecommendedModel(message: string): string | null {
 export function modelCandidates(): string[] {
   const explicit = process.env.GEMINI_MODEL?.trim() || null;
   const configured = getConfiguredGeminiModel();
-  const staticCandidates = [configured, ...GEMINI.modelFallbacks, getGeminiFallbackModel()];
-  const first = explicit && !refusedModels.has(explicit)
-    ? explicit
-    : !explicit && discoveredModel && !refusedModels.has(discoveredModel)
-      ? discoveredModel
-      : explicit && refusedModels.has(explicit) && discoveredModel && !refusedModels.has(discoveredModel)
+  const staticCandidates = [
+    configured,
+    // The lite model is the intentional high-demand backstop; speculative
+    // model names stay behind it and are only useful after a model-level 404.
+    getGeminiFallbackModel(),
+    ...GEMINI.modelFallbacks,
+  ];
+  const first =
+    explicit && !refusedModels.has(explicit)
+      ? explicit
+      : !explicit && discoveredModel && !refusedModels.has(discoveredModel)
         ? discoveredModel
-        : configured && !refusedModels.has(configured)
-          ? configured
-          : GEMINI.modelFallbacks.find((model) => !refusedModels.has(model)) || getGeminiFallbackModel();
+        : explicit &&
+            refusedModels.has(explicit) &&
+            discoveredModel &&
+            !refusedModels.has(discoveredModel)
+          ? discoveredModel
+          : configured && !refusedModels.has(configured)
+            ? configured
+            : getGeminiFallbackModel();
 
   return [...new Set([first, ...staticCandidates].filter(Boolean))];
 }
 
 /** Put Google's suggested replacement at the front of a pending model queue. */
-export function queueSuggestion(queue: string[], suggestion: string | null | undefined): void {
+export function queueSuggestion(
+  queue: string[],
+  suggestion: string | null | undefined,
+): void {
   const model = suggestion?.trim();
-  if (!model || queue.includes(model)) return;
+  if (!model) return;
+  const existingIndex = queue.indexOf(model);
+  if (existingIndex >= 0) queue.splice(existingIndex, 1);
   queue.unshift(model);
 }
 
@@ -142,9 +158,7 @@ export function queueSuggestion(queue: string[], suggestion: string | null | und
 export function getGeminiClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
-    throw new GeminiConfigError(
-      "GEMINI_API_KEY is not set. Add it to .env.local (local) or your host's environment variables (production).",
-    );
+    throw new GeminiConfigError("Gemini is not configured on this installation.");
   }
 
   // Optional endpoint override: a regional endpoint, a self-hosted gateway, or
@@ -173,6 +187,7 @@ export interface GeminiFailure {
     | "invalid-key"
     | "quota"
     | "model-unavailable"
+    | "temporarily-unavailable"
     | "blocked"
     | "network"
     | "timeout"
@@ -189,12 +204,17 @@ export function classifyGeminiError(error: unknown): GeminiFailure {
     return {
       kind: "missing-key",
       message: error.message,
-      remedy: "Create a free key at aistudio.google.com/apikey and add it as GEMINI_API_KEY.",
+      remedy: "Add GEMINI_API_KEY to the app environment to enable the Assistant.",
       retryable: false,
     };
   }
 
-  const raw = error instanceof Error ? error.message : String(error);
+  const raw =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object"
+        ? JSON.stringify(error) || String(error)
+        : String(error);
   // Keep both the original spelling and a separator-normalised copy, so
   // `"status":"NOT_FOUND"`, `not-found` and `not_found` match the same rule,
   // without hiding `api_key_invalid` / `resource_exhausted` from the checks
@@ -202,19 +222,29 @@ export function classifyGeminiError(error: unknown): GeminiFailure {
   const lower = raw.toLowerCase();
   const text = `${lower}\n${lower.replace(/[_-]+/g, " ")}`;
 
-  if (text.includes("api key not valid") || text.includes("api_key_invalid") || text.includes("invalid api key")) {
+  if (
+    text.includes("api key not valid") ||
+    text.includes("api_key_invalid") ||
+    text.includes("invalid api key")
+  ) {
     return {
       kind: "invalid-key",
       message: "That Gemini API key was rejected.",
-      remedy: "Double-check the key value (no quotes or spaces) — or generate a fresh one at aistudio.google.com/apikey.",
+      remedy:
+        "Double-check the key value (no quotes or spaces) — or generate a fresh one at aistudio.google.com/apikey.",
       retryable: false,
     };
   }
-  if (text.includes("quota") || text.includes("429") || text.includes("resource_exhausted")) {
+  if (
+    text.includes("quota") ||
+    text.includes("429") ||
+    text.includes("resource_exhausted")
+  ) {
     return {
       kind: "quota",
       message: "Gemini free-tier quota reached for now.",
-      remedy: "Wait a minute, or switch GEMINI_MODEL to gemini-2.5-flash-lite.",
+      remedy:
+        "Wait a minute, then use Retry assistant. A different model may have separate availability.",
       retryable: true,
     };
   }
@@ -236,31 +266,75 @@ export function classifyGeminiError(error: unknown): GeminiFailure {
       retryable: false,
     };
   }
-  if (text.includes("safety") || text.includes("blocked") || text.includes("finish_reason")) {
+  // Google uses 503 UNAVAILABLE for short demand spikes. Treat it as a
+  // bounded, recoverable service condition: the caller may retry once and then
+  // try another configured model, but it must never expose Google's JSON blob.
+  if (
+    text.includes("503") ||
+    text.includes("unavailable") ||
+    text.includes("high demand") ||
+    text.includes("temporarily busy") ||
+    text.includes("overloaded") ||
+    text.includes("service unavailable")
+  ) {
+    return {
+      kind: "temporarily-unavailable",
+      message: "Gemini is temporarily busy right now.",
+      remedy:
+        "The app retried other Gemini models automatically. Wait a moment and choose Retry assistant.",
+      retryable: true,
+    };
+  }
+  if (
+    text.includes("safety") ||
+    text.includes("blocked") ||
+    text.includes("finish_reason")
+  ) {
     return {
       kind: "blocked",
       message: "The model refused this request (safety filter).",
-      remedy: "Rephrase the prompt or ask about a different part of the transcript.",
+      remedy:
+        "Rephrase the prompt or ask about a different part of the transcript.",
       retryable: false,
     };
   }
-  if (text.includes("fetch failed") || text.includes("enotfound") || text.includes("econnrefused") || text.includes("network")) {
+  if (
+    text.includes("fetch failed") ||
+    text.includes("enotfound") ||
+    text.includes("econnrefused") ||
+    text.includes("network")
+  ) {
     return {
       kind: "network",
       message: "Could not reach the Gemini API from this server.",
-      remedy: "Some sandboxes block outbound traffic. Deploy to Vercel or run locally where the network is open.",
+      remedy:
+        "Some sandboxes block outbound traffic. Deploy to Vercel or run locally where the network is open.",
       retryable: true,
     };
   }
-  if (text.includes("aborted") || text.includes("timeout") || text.includes("etimedout")) {
+  if (
+    text.includes("aborted") ||
+    text.includes("timeout") ||
+    text.includes("etimedout")
+  ) {
     return {
       kind: "timeout",
       message: "The Gemini request timed out.",
-      remedy: "Try a shorter question, or retry — long transcripts with thinking enabled take longer.",
+      remedy:
+        "Try a shorter question, or retry — long transcripts with thinking enabled take longer.",
       retryable: true,
     };
   }
-  return { kind: "unknown", message: raw, retryable: true };
+  // Provider exceptions can contain request ids, URLs, or raw JSON. Keep those
+  // in server logs/debuggers only; the Assistant should always have a calm next
+  // step instead of printing an opaque provider payload.
+  return {
+    kind: "unknown",
+    message: "Gemini could not complete that request.",
+    remedy:
+      "Wait a moment and choose Retry assistant. If it keeps happening, run diagnostics.",
+    retryable: true,
+  };
 }
 
 /** One attempt in a fallback run. */
@@ -274,7 +348,12 @@ export interface ModelAttempt {
 
 export type ModelRunResult<T> =
   | { ok: true; value: T; model: string; attempts: ModelAttempt[] }
-  | { ok: false; failure: GeminiFailure; model: string; attempts: ModelAttempt[] };
+  | {
+      ok: false;
+      failure: GeminiFailure;
+      model: string;
+      attempts: ModelAttempt[];
+    };
 
 /**
  * Call the API, rotating models only when the failure is *about the model*.
@@ -287,15 +366,30 @@ export type ModelRunResult<T> =
  */
 export async function runWithModelFallback<T>(
   call: (model: string) => Promise<T>,
-  options: { candidates?: string[] } = {},
+  options: {
+    candidates?: string[];
+    /** Total provider calls, including the one bounded transient retry. */
+    maxAttempts?: number;
+    /** Delay before retrying a temporary 503 on the same model. */
+    transientRetryDelayMs?: number;
+  } = {},
 ): Promise<ModelRunResult<T>> {
   // De-duplicate defensively: the caller's list comes from env vars and a
   // hardcoded backstop, and a repeated name would mean two identical calls —
-  // wasted quota against a free tier.
-  const queue = [...new Set((options.candidates ?? modelCandidates()).filter(Boolean))];
+  // wasted quota against a free tier. Four calls is a hard ceiling for one
+  // user action, so a provider spike cannot turn into a long spinner.
+  const queue = [
+    ...new Set((options.candidates ?? modelCandidates()).filter(Boolean)),
+  ];
   const attempts: ModelAttempt[] = [];
+  const maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? 4));
+  const retryDelayMs = Math.max(
+    0,
+    Math.floor(options.transientRetryDelayMs ?? 350),
+  );
+  const retriedTemporarily = new Set<string>();
 
-  while (queue.length > 0) {
+  while (queue.length > 0 && attempts.length < maxAttempts) {
     const model = queue.shift() as string;
     try {
       const value = await call(model);
@@ -306,9 +400,28 @@ export async function runWithModelFallback<T>(
       const failure = classifyGeminiError(error);
       const recommended =
         failure.kind === "model-unavailable"
-          ? extractRecommendedModel(error instanceof Error ? error.message : String(error))
+          ? extractRecommendedModel(
+              error instanceof Error ? error.message : String(error),
+            )
           : null;
-      attempts.push({ model, ok: false, failure, ...(recommended ? { recommended } : {}) });
+      attempts.push({
+        model,
+        ok: false,
+        failure,
+        ...(recommended ? { recommended } : {}),
+      });
+
+      if (failure.kind === "temporarily-unavailable" || failure.kind === "timeout") {
+        // A single same-model retry catches a short 503 spike or a stalled
+        // request. If it still fails, the normal queue supplies a bounded
+        // model fallback.
+        if (!retriedTemporarily.has(model) && attempts.length < maxAttempts) {
+          retriedTemporarily.add(model);
+          await wait(retryDelayMs);
+          queue.unshift(model);
+        }
+        continue;
+      }
 
       if (failure.kind !== "model-unavailable") {
         return { ok: false, failure, model, attempts };
@@ -318,7 +431,7 @@ export async function runWithModelFallback<T>(
       // Believe Google's suggestion before our own list, and never retry a
       // name we have already burned.
       const tried = new Set(attempts.map((attempt) => attempt.model));
-      if (recommended && !tried.has(recommended) && !queue.includes(recommended)) {
+      if (recommended && !tried.has(recommended)) {
         queueSuggestion(queue, recommended);
       }
     }
@@ -330,9 +443,17 @@ export async function runWithModelFallback<T>(
     model: last?.model ?? "",
     failure:
       last?.failure ??
-      classifyGeminiError(new Error("No Gemini model candidates were available.")),
+      classifyGeminiError(
+        new Error("No Gemini model candidates were available."),
+      ),
     attempts,
   };
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return milliseconds > 0
+    ? new Promise((resolve) => setTimeout(resolve, milliseconds))
+    : Promise.resolve();
 }
 
 /**
@@ -397,7 +518,12 @@ export async function probeGemini(
       }
     },
     // Start from the best-known model, then this project's known-good list.
-    { candidates: [startModel, ...modelCandidates().filter((m) => m !== startModel)] },
+    {
+      candidates: [
+        startModel,
+        ...modelCandidates().filter((m) => m !== startModel),
+      ],
+    },
   );
 
   if (!run.ok) {

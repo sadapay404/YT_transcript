@@ -102,11 +102,11 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
 
   return (
     <section
-      className={cn("flex min-h-0 flex-1 flex-col", className)}
+      className={cn("relative flex min-h-0 flex-1 flex-col overflow-visible", className)}
       aria-label="Transcript"
     >
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2">
+      <header className="relative z-30 flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2">
         <div className="flex items-center gap-2">
           <AlignLeft className="h-3.5 w-3.5 text-accent" />
           <h2 className="text-[12px] font-semibold tracking-wide text-ink-soft uppercase">
@@ -140,7 +140,7 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
       {/* ── Lines ──────────────────────────────────────────────────────── */}
       {/* The wrapper is what pins "Resume following" over the rail; the rail
           itself is the element the follow engine measures and scrolls. */}
-      <div className="relative min-h-0 flex-1">
+      <div className="relative z-0 min-h-0 flex-1">
         <div
           ref={containerRef}
           className="fade-y h-full overflow-y-auto overscroll-contain px-2 py-3 sm:px-3"

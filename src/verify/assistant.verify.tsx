@@ -11,6 +11,7 @@ import { createRoot, type Root } from "react-dom/client";
 
 import { ClipActions } from "@/components/workspace/ClipActions";
 import { ExportMenu } from "@/components/export/ExportMenu";
+import { AssistantPanel } from "@/components/assistant/AssistantPanel";
 import { EXPORT_PRESETS, clipColorAt } from "@/lib/constants";
 import { buildTranscriptContext } from "@/lib/gemini/prompts";
 import { mapClipPlan, buildClipOverlay } from "@/lib/clips/map";
@@ -207,12 +208,48 @@ describe("Step 4 assistant context and stream", () => {
     expect(useChatStore.getState().messages.at(-1)?.status).toBe("error");
     expect(useChatStore.getState().messages.at(-1)?.error).toContain("Set up");
   });
+  it("retries a transient assistant failure in place without duplicating the turn", async () => {
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      calls += 1;
+      const body = calls === 1
+        ? '{"type":"error","code":"temporarily-unavailable","message":"Gemini is temporarily busy right now."}\n{"type":"done"}\n'
+        : '{"type":"delta","text":"Recovered."}\n{"type":"done"}\n';
+      return new Response(body);
+    }));
+
+    await useChatStore.getState().sendMessage("find clips", "clips");
+    expect(useChatStore.getState().messages).toHaveLength(2);
+    expect(useChatStore.getState().messages.at(-1)?.retryable).toBe(true);
+
+    await useChatStore.getState().retryLast();
+    const messages = useChatStore.getState().messages;
+    expect(calls).toBe(2);
+    expect(messages).toHaveLength(2);
+    expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
+    expect(messages.at(-1)?.content).toBe("Recovered.");
+  });
+
   it("marks a stream complete exactly once", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response('{"type":"done"}\n')));
     await useChatStore.getState().sendMessage("question");
     expect(useChatStore.getState().isStreaming).toBe(false);
     expect(useChatStore.getState().messages.filter((message) => message.role === "assistant")).toHaveLength(1);
   });
+  it("renders the assistant as an overlay drawer instead of a third pane", async () => {
+    useSettingsStore.getState().setSidebarOpen(true);
+    await act(async () => root.render(<AssistantPanel />));
+    const drawer = host.querySelector("[data-assistant-drawer]") as HTMLElement | null;
+    expect(drawer).not.toBeNull();
+    expect(drawer?.className).toContain("fixed");
+    expect(drawer?.className).toContain("top-[4.25rem]");
+
+    await act(async () => {
+      host.querySelector('[aria-label="Close assistant"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(useSettingsStore.getState().sidebarOpen).toBe(false);
+  });
+
   it("renders the assistant shell only when opened", async () => {
     // The header owns the open flag; this check verifies the preference seam.
     expect(useSettingsStore.getState().sidebarOpen).toBe(false);

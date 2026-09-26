@@ -128,6 +128,10 @@ export interface ChatMessage {
   clipPlan?: ClipPlan;
   /** Present when `status === "error"`. */
   error?: string;
+  /** Machine-readable provider category for the recoverable error state. */
+  errorCode?: string;
+  /** Whether the UI should offer a same-request retry action. */
+  retryable?: boolean;
   /** Model that produced the turn (for the "which model answered" footer). */
   model?: string;
   /** Seconds the model spent (nice for the token-efficiency readout). */

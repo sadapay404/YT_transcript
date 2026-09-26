@@ -144,7 +144,6 @@ export function Workspace() {
       </AnimatePresence>
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
-      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
       <div className="min-w-0 flex-1">
       <AnimatePresence mode="wait" initial={false}>
         {status === "loading" && !hasTranscript ? (
@@ -171,7 +170,7 @@ export function Workspace() {
               "grid min-h-0 flex-1 gap-3",
               // Split: side-by-side, transcript rail beside the player.
               viewMode === "split" &&
-                "lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]",
+                "xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]",
               // Cinema: player full width on top, transcript as a wide rail below.
               viewMode === "cinema" && "grid-cols-1",
               // Read: transcript only, centred to a comfortable measure.
@@ -189,7 +188,7 @@ export function Workspace() {
                   exit={{ opacity: 0, scale: 0.97 }}
                   transition={SPRING}
                   className={cn(
-                    "panel overflow-hidden lg:sticky lg:top-[3.75rem] lg:self-start",
+                    "panel relative z-0 overflow-visible xl:sticky xl:top-[3.75rem] xl:self-start",
                     viewMode === "cinema" && "mx-auto w-full max-w-5xl",
                   )}
                 >
@@ -217,9 +216,9 @@ export function Workspace() {
               layout
               transition={SPRING}
               className={cn(
-                "panel flex min-h-0 flex-col overflow-hidden",
+                "panel relative z-10 flex min-h-0 flex-col overflow-visible",
                 viewMode === "cinema" && "max-h-[70vh]",
-                viewMode === "split" && "lg:max-h-[calc(100dvh-11rem)]",
+                viewMode === "split" && "xl:max-h-[calc(100dvh-11rem)]",
                 readingOnly && "min-h-[70vh]",
               )}
             >
@@ -230,7 +229,6 @@ export function Workspace() {
       </AnimatePresence>
       </div>
       <AssistantPanel />
-      </div>
 
       {/* ── Shortcut hint ───────────────────────────────────────────────── */}
       {hasTranscript && (
@@ -374,7 +372,7 @@ function LoadingState() {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)]"
+      className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]"
     >
       <div className="panel overflow-hidden">
         <div className="aspect-video w-full bg-ink/[0.05]" />

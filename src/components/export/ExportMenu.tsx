@@ -57,14 +57,14 @@ export function ExportMenu({ className = "", compact = false }: { className?: st
   };
 
   return (
-    <div className={cn("relative", className)}>
+    <div className={cn("relative z-50", className)} data-export-menu>
       <button
         type="button"
         disabled={!transcript}
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={() => setOpen((value) => !value)}
-        title={transcript ? "Export transcript" : "Load a transcript to export"}
+        title={transcript ? "Export whole transcript" : "Load a transcript to export"}
         className={cn("btn gap-2 border border-line disabled:opacity-40", compact ? "btn-icon h-9 w-9" : "h-9 px-2.5")}
       >
         <Download className="h-3.5 w-3.5" />
@@ -73,7 +73,7 @@ export function ExportMenu({ className = "", compact = false }: { className?: st
       </button>
 
       {open && transcript && exportResult && (
-        <div role="menu" aria-label="Export formats" className="absolute right-0 z-50 mt-2 w-[min(92vw,380px)] overflow-hidden rounded-2xl border border-line bg-elevated shadow-panel">
+        <div role="menu" aria-label="Export formats" className="absolute right-0 z-[70] mt-2 max-h-[calc(100dvh-5.5rem)] w-[min(92vw,380px)] overflow-y-auto overscroll-contain rounded-2xl border border-line bg-elevated shadow-panel">
           <div className="border-b border-line px-3 py-2.5">
             <div className="flex items-center justify-between gap-2">
               <div><p className="text-[12px] font-semibold text-ink">Ship the transcript</p><p className="text-[10.5px] text-ink-faint">Live preview · {clips.length} clip{clips.length === 1 ? "" : "s"}</p></div>

@@ -135,7 +135,10 @@ function normalizeClip(value: unknown): RawClip | null {
 
   const start = asNumber(object.start_time);
   const end = asNumber(object.end_time);
-  if (start === undefined || end === undefined) return null;
+  // The JSON schema asks for a real forward range. Rejecting malformed ranges
+  // here keeps the mapper from having to invent a clip and preserves the
+  // all-or-nothing, user-retryable contract for a bad model response.
+  if (start === undefined || end === undefined || start < 0 || end <= start) return null;
 
   const title = asString(object.title, 180) || "Untitled clip";
   const transcriptText = asString(object.transcript_text, 4_000);

@@ -26,10 +26,13 @@ interface ChatState {
   send: (message: string, mode?: ChatMode) => Promise<void>;
   setMode: (mode: ChatMode) => void;
   stop: () => void;
+  /** Re-run the last failed request without leaving a duplicate failed turn. */
+  retryLast: () => Promise<void>;
   clear: () => void;
 }
 
 let activeAbort: AbortController | null = null;
+let lastFailedRequest: { message: string; mode: ChatMode } | null = null;
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
@@ -58,6 +61,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             createdAt: Date.now(),
             status: "error",
             error: "No transcript loaded.",
+            errorCode: "no-transcript",
+            retryable: false,
           },
         ],
       }));
@@ -66,6 +71,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     const mode = requestedMode ?? get().mode;
     set({ mode });
+    lastFailedRequest = { message: text, mode };
 
     // Capture history before appending this question. Including the new user
     // turn here would send it twice and makes follow-up answers oddly repetitive.
@@ -128,8 +134,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         signal: abort.signal,
       });
       if (!response.ok) {
-        const detail = await response.json().catch(() => null) as { message?: string } | null;
-        throw new Error(detail?.message || `Assistant request failed (${response.status}).`);
+        const detail = (await response.json().catch(() => null)) as { message?: unknown } | null;
+        const message = typeof detail?.message === "string" ? safeErrorText(detail.message) : "";
+        throw new Error(message || `Assistant request failed (${response.status}). Try again.`);
       }
       if (!response.body) throw new Error("The assistant returned an empty stream.");
 
@@ -164,6 +171,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       buffer += decoder.decode();
       if (buffer.trim()) consume(buffer);
       if (!sawDone) finishAssistant(assistantId, false);
+      if (useChatStore.getState().messages.find((message) => message.id === assistantId)?.status !== "error") {
+        lastFailedRequest = null;
+      }
     } catch (error) {
       if (abort.signal.aborted) {
         finishAssistant(assistantId, true);
@@ -182,9 +192,37 @@ export const useChatStore = create<ChatState>((set, get) => ({
     activeAbort = null;
   },
 
+  retryLast: async () => {
+    if (get().isStreaming || !lastFailedRequest) return;
+    const request = lastFailedRequest;
+    const messages = get().messages;
+    const assistantIndex = [...messages]
+      .map((message, index) => ({ message, index }))
+      .reverse()
+      .find(({ message }) => message.role === "assistant" && message.status === "error")?.index;
+    const userIndex =
+      assistantIndex === undefined
+        ? undefined
+        : [...messages]
+            .map((message, index) => ({ message, index }))
+            .reverse()
+            .find(({ message, index }) => index < assistantIndex && message.role === "user")?.index;
+
+    // Replace the failed turn in-place. Keeping the old error and appending a
+    // second user question makes a temporary provider outage look like a
+    // duplicated conversation.
+    if (assistantIndex !== undefined && userIndex !== undefined) {
+      set({
+        messages: messages.filter((_, index) => index !== assistantIndex && index !== userIndex),
+      });
+    }
+    await get().sendMessage(request.message, request.mode);
+  },
+
   clear: () => {
     activeAbort?.abort();
     activeAbort = null;
+    lastFailedRequest = null;
     useTranscriptStore.getState().clearClips();
     set({ messages: [], isStreaming: false });
   },
@@ -213,7 +251,7 @@ function handleEvent(
       return;
     }
     case "error":
-      setAssistantError(assistantId, event.message);
+      setAssistantError(assistantId, event.message, event.code);
       return;
     case "done":
       finishAssistant(assistantId, true);
@@ -238,14 +276,35 @@ function finishAssistant(id: string, successful: boolean): void {
   }));
 }
 
-function setAssistantError(id: string, error: string): void {
+function setAssistantError(id: string, error: string, code?: string): void {
+  const safe = safeErrorText(error);
+  const nonRetryable = new Set(["missing-key", "invalid-key", "blocked", "no-transcript"]);
   updateAssistant(id, (message) => ({
     ...message,
     status: "error",
-    error,
-    content: message.content || error,
+    error: safe,
+    errorCode: code,
+    retryable: !code || !nonRetryable.has(code),
+    // Do not put the provider's error into the message body. The body is
+    // rendered as normal assistant prose; the dedicated error row below it is
+    // the only place a recoverable failure belongs.
+    content: message.content || "The assistant couldn't complete that request.",
     latencyMs: Date.now() - message.createdAt,
   }));
+}
+
+function safeErrorText(value: string): string {
+  const text = value.trim();
+  if (!text || text.length > 500) return "The assistant could not complete that request. Try again in a moment.";
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (parsed && typeof parsed === "object") {
+      return "The assistant could not complete that request. Try again in a moment.";
+    }
+  } catch {
+    // Plain, server-authored messages are safe to show.
+  }
+  return text;
 }
 
 function historyFromMessages(messages: ChatMessage[]): ChatHistoryEntry[] {

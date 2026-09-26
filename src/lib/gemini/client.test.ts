@@ -35,6 +35,18 @@ describe("classifyGeminiError", () => {
     expect(failure.message).toContain("gemini-3.8-flash");
   });
 
+  it("turns Google's high-demand 503 into a friendly recoverable failure", () => {
+    const failure = classifyGeminiError(
+      new Error(
+        '{"error":{"code":503,"message":"This model is currently experiencing high demand.","status":"UNAVAILABLE"}}',
+      ),
+    );
+    expect(failure.kind).toBe("temporarily-unavailable");
+    expect(failure.message).toBe("Gemini is temporarily busy right now.");
+    expect(failure.message).not.toContain("UNAVAILABLE");
+    expect(failure.retryable).toBe(true);
+  });
+
   it("does not disguise a quota error as a model problem", () => {
     expect(classifyGeminiError(new Error("RESOURCE_EXHAUSTED: quota")).kind).toBe("quota");
   });
@@ -58,6 +70,23 @@ describe("runWithModelFallback", () => {
     expect(result.ok).toBe(true);
     expect(modelCandidates()[0]).toBe("gemini-3.8-flash");
     expect(modelCandidates()).toContain("gemini-pinned");
+  });
+
+  it("retries one temporary 503, then falls back without an unbounded loop", async () => {
+    const calls: string[] = [];
+    const result = await runWithModelFallback(
+      async (model) => {
+        calls.push(model);
+        if (model === "primary") {
+          throw new Error('{"code":503,"status":"UNAVAILABLE","message":"high demand"}');
+        }
+        return "pong";
+      },
+      { candidates: ["primary", "fallback"], transientRetryDelayMs: 0 },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(calls).toEqual(["primary", "primary", "fallback"]);
   });
 
   it("pivots to the model named in Google's error, remembers it, and does not retry quota", async () => {

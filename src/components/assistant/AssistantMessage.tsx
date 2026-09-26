@@ -1,11 +1,19 @@
 "use client";
 
+import { RotateCw } from "lucide-react";
+
 import type { ChatMessage } from "@/lib/types";
 import { ClipPlanList } from "@/components/assistant/ClipPlanList";
 import { RichText } from "@/components/assistant/RichText";
 import { useTranscriptStore } from "@/stores/useTranscriptStore";
 
-export function AssistantMessage({ message }: { message: ChatMessage }) {
+export function AssistantMessage({
+  message,
+  onRetry,
+}: {
+  message: ChatMessage;
+  onRetry?: () => void;
+}) {
   const user = message.role === "user";
   const clips = useTranscriptStore((state) => state.clips);
   return (
@@ -22,7 +30,20 @@ export function AssistantMessage({ message }: { message: ChatMessage }) {
             <RichText content={message.content} />
           </div>
         )}
-        {message.error && <p className="mt-2 border-t border-danger/20 pt-1.5 text-[11px] leading-relaxed text-danger">{message.error}</p>}
+        {message.error && (
+          <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 border-t border-danger/20 pt-1.5 text-[11px] leading-relaxed text-danger">
+            <span>{message.error}</span>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="btn h-7 gap-1.5 border border-danger/30 px-2 text-[10.5px] text-danger hover:border-danger hover:bg-danger/10"
+              >
+                <RotateCw className="h-3 w-3" /> Retry assistant
+              </button>
+            )}
+          </div>
+        )}
         {!user && (message.model || message.latencyMs) && (
           <p className="mt-2 border-t border-line pt-1.5 font-mono text-[9px] text-ink-faint">
             {message.model ? `answered by ${message.model}` : "assistant"}

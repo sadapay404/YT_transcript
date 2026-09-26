@@ -30,6 +30,8 @@ const MAX_MESSAGE = 4_000;
 const MAX_HISTORY_TURNS = 8;
 const MAX_HISTORY_CHARACTERS = 6_000;
 const MAX_SEGMENTS = 6_000;
+/** Keep the four-call fallback inside the route's 60s budget. */
+const GEMINI_REQUEST_TIMEOUT_MS = 14_000;
 
 /**
  * The assistant is a public API route, so it validates and caps its input even
@@ -98,18 +100,25 @@ async function produceClipPlan(
 ): Promise<void> {
   const prompt = buildUserPrompt(payload.mode, payload.message, payload.transcript, payload.history);
   const result = await runWithModelFallback(async (model) => {
-    const ai = getGeminiClient();
-    return ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        systemInstruction: ASSISTANT_SYSTEM_PROMPT,
-        temperature: GEMINI.temperature.clips,
-        maxOutputTokens: GEMINI.maxOutputTokens.clips,
-        responseMimeType: "application/json",
-        responseJsonSchema: CLIP_PLAN_SCHEMA,
-      },
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), GEMINI_REQUEST_TIMEOUT_MS);
+    try {
+      const ai = getGeminiClient();
+      return await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          systemInstruction: ASSISTANT_SYSTEM_PROMPT,
+          temperature: GEMINI.temperature.clips,
+          maxOutputTokens: GEMINI.maxOutputTokens.clips,
+          responseMimeType: "application/json",
+          responseJsonSchema: CLIP_PLAN_SCHEMA,
+          abortSignal: controller.signal,
+        },
+      });
+    } finally {
+      clearTimeout(timer);
+    }
   });
 
   if (!result.ok) {
@@ -138,10 +147,17 @@ async function produceStream(
   const prompt = buildUserPrompt(payload.mode, payload.message, payload.transcript, payload.history);
   const queue = modelCandidates();
   const attempts: Array<{ model: string; failure: GeminiFailure }> = [];
+  const retriedTemporarily = new Set<string>();
+  const maxAttempts = 4;
   let emittedText = false;
 
-  while (queue.length > 0) {
+  // Streaming cannot use the generic fallback helper because it must not switch
+  // models after any text has reached the browser. It still gets the same hard
+  // ceiling and one same-model retry for a transient 503.
+  while (queue.length > 0 && attempts.length < maxAttempts) {
     const model = queue.shift() as string;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), GEMINI_REQUEST_TIMEOUT_MS);
     try {
       const ai = getGeminiClient();
       const stream = await ai.models.generateContentStream({
@@ -153,6 +169,7 @@ async function produceStream(
             payload.mode === "summary" ? GEMINI.temperature.summary : GEMINI.temperature.chat,
           maxOutputTokens:
             payload.mode === "summary" ? GEMINI.maxOutputTokens.summary : GEMINI.maxOutputTokens.chat,
+          abortSignal: controller.signal,
         },
       });
 
@@ -175,7 +192,19 @@ async function produceStream(
       const failure = classifyGeminiError(error);
       attempts.push({ model, failure });
       // Retrying after text has reached the client would duplicate the answer.
-      // A model refusal before the first delta is the only safe streaming retry.
+      // Before the first delta, a 503 gets one same-model retry and then the
+      // remaining queue supplies a bounded fallback.
+      if (
+        (failure.kind === "temporarily-unavailable" || failure.kind === "timeout") &&
+        !emittedText
+      ) {
+        if (!retriedTemporarily.has(model) && attempts.length < maxAttempts) {
+          retriedTemporarily.add(model);
+          await delay(350);
+          queue.unshift(model);
+        }
+        continue;
+      }
       if (failure.kind === "model-unavailable" && !emittedText) {
         markGeminiModelUnavailable(model);
         const recommendation =
@@ -185,6 +214,8 @@ async function produceStream(
         continue;
       }
       throw error;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -256,6 +287,10 @@ function normalizeHistory(value: unknown): ChatHistoryEntry[] {
     characters += clipped.length;
   }
   return result;
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function invalidBody(message: string): Response {
