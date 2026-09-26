@@ -1,6 +1,7 @@
 "use client";
 
 import { AuroraBackdrop } from "@/components/layout/AuroraBackdrop";
+import { CreditsFooter } from "@/components/layout/CreditsFooter";
 import { StudioHeader } from "@/components/layout/StudioHeader";
 
 /**
@@ -13,6 +14,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AuroraBackdrop />
       <StudioHeader />
       <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      <CreditsFooter />
     </div>
   );
 }

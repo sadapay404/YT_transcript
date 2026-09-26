@@ -2,12 +2,12 @@
 
 /**
  * The one input that matters: paste a link, get a transcript.
- * Validates locally (instant feedback, no round trip) and shows the demo escape
- * hatch whenever a fetch fails for environmental reasons.
+ * Validates locally (instant feedback, no round trip) and keeps the primary
+ * recovery paths — example link and paste — close to the input.
  */
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, ClipboardPaste, Link2, Loader2, Sparkles, X } from "lucide-react";
+import { ArrowRight, ClipboardPaste, Link2, Loader2, X } from "lucide-react";
 
 import { DEMO_URL } from "@/lib/constants";
 import { cn, parseYouTubeUrl } from "@/lib/utils";
@@ -20,7 +20,6 @@ export function UrlBar({ autoFocus = false }: { autoFocus?: boolean }) {
   const value = useTranscriptStore((s) => s.input);
   const setValue = useTranscriptStore((s) => s.setInput);
   const extract = useTranscriptStore((s) => s.extract);
-  const loadDemo = useTranscriptStore((s) => s.loadDemo);
   /** Pasting needs no network at all, so it is offered up front rather than
    *  only after a fetch fails — it is the one path that always works. */
   const openPaste = useTranscriptStore((s) => s.openPaste);
@@ -157,17 +156,6 @@ export function UrlBar({ autoFocus = false }: { autoFocus?: boolean }) {
             >
               That doesn&apos;t look like a YouTube link yet.
             </motion.p>
-          ) : parsed ? (
-            <motion.p
-              key="valid"
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="font-mono text-[11px] text-ink-faint"
-            >
-              video id <span className="text-accent">{parsed.videoId}</span>
-              {parsed.startAt ? ` · starts at ${parsed.startAt}s` : ""}
-            </motion.p>
           ) : (
             <motion.p
               key="hint"
@@ -190,18 +178,6 @@ export function UrlBar({ autoFocus = false }: { autoFocus?: boolean }) {
           className="text-[11.5px] text-ink-faint underline decoration-dotted transition-colors hover:text-ink-soft"
         >
           use an example link
-        </button>
-
-        <span className="text-ink-faint/50">·</span>
-
-        <button
-          type="button"
-          onClick={() => void loadDemo()}
-          disabled={loading}
-          className="inline-flex items-center gap-1 text-[11.5px] text-ink-faint underline decoration-dotted transition-colors hover:text-ink-soft"
-        >
-          <Sparkles className="h-3 w-3" />
-          or read the demo transcript
         </button>
 
         <span className="text-ink-faint/50">·</span>

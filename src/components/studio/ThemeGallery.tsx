@@ -24,7 +24,7 @@ export function ThemeGallery() {
   const setTheme = useSettingsStore((s) => s.setTheme);
 
   return (
-    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-2">
       {THEMES.map((definition, index) => {
         const active = definition.id === theme;
         return (
@@ -83,6 +83,17 @@ export function ThemeGallery() {
               >
                 {definition.tagline}
               </span>
+              <span
+                className="mt-1.5 block text-[10px] leading-snug"
+                style={{ color: `${definition.swatch[1]}88` }}
+              >
+                {definition.detail}
+              </span>
+              {definition.warning && (
+                <span className="mt-2 inline-flex rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[9.5px] font-semibold text-amber-700 scheme-dark:text-amber-200">
+                  {definition.warning}
+                </span>
+              )}
             </span>
 
             <span className="relative mt-2.5 flex items-center gap-1">

@@ -1,12 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Activity, AudioLines, PanelRight, Settings2 } from "lucide-react";
+import { Activity, PanelRight } from "lucide-react";
 
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { StylePanel } from "@/components/layout/StylePanel";
-import { ThemeSwitcher } from "@/components/layout/ThemeSwitcher";
 import { ViewModeSwitch } from "@/components/layout/ViewModeSwitch";
 import { ExportMenu } from "@/components/export/ExportMenu";
 import { useSettingsStore } from "@/stores/useSettingsStore";
@@ -30,7 +30,14 @@ export function StudioHeader() {
               animate={{ opacity: [0.35, 0.8, 0.35] }}
               transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
             />
-            <AudioLines className="relative h-4 w-4 text-accent" />
+            <Image
+              src="/logo-mark.png"
+              alt=""
+              width={32}
+              height={32}
+              priority
+              className="relative h-full w-full rounded-[0.6rem] object-cover"
+            />
           </span>
           <span className="flex flex-col leading-none">
             <span className="text-gradient text-[15px] font-bold tracking-tight">
@@ -57,7 +64,6 @@ export function StudioHeader() {
             <ExportMenu />
           </div>
 
-          <ThemeSwitcher />
           <StylePanel />
 
           <Link
@@ -78,13 +84,6 @@ export function StudioHeader() {
             <PanelRight className="h-4 w-4" />
           </button>
 
-          <button
-            type="button"
-            title="Studio settings (Step 3)"
-            className="btn btn-icon hidden h-9 w-9 border border-line sm:inline-flex"
-          >
-            <Settings2 className="h-4 w-4" />
-          </button>
         </div>
       </div>
     </header>

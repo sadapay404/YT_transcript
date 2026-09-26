@@ -8,10 +8,12 @@
  * that served the request*, it correctly distinguishes "my code is broken" from
  * "this sandbox has no internet".
  */
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
   ClipboardCopy,
   CircleSlash,
@@ -144,6 +146,15 @@ export function StatusDashboard() {
   return (
     <div className="mx-auto w-full max-w-4xl px-4 pt-8 pb-20 sm:px-6">
       {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="mb-4">
+        <Link
+          href="/"
+          className="btn h-8 gap-1.5 border border-line px-2.5 text-[11.5px]"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to TranStudio
+        </Link>
+      </div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <span className="chip chip-accent">

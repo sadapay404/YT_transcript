@@ -2,18 +2,18 @@
 
 /**
  * Style & reading preferences, in one popover:
- * theme, typeface, sizing, reading aids and playback behaviour.
+ * typeface, sizing, reading aids, layout and playback behaviour. Theme choice
+ * lives in the landing studio so the header stays calm and focused.
  *
  * Everything writes to the settings store, which mirrors to a cookie — so the
  * server renders the saved look on the next request, with no flash.
  */
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Baseline, Eye, LayoutTemplate, SunMoon, X } from "lucide-react";
+import { Baseline, Eye, LayoutTemplate, X } from "lucide-react";
 
 import { Switch } from "@/components/ui/Switch";
 import { TypographyStudio } from "@/components/studio/TypographyStudio";
-import { ThemeSwitcher } from "@/components/layout/ThemeSwitcher";
 import { ViewModeSwitch } from "@/components/layout/ViewModeSwitch";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 
@@ -86,11 +86,6 @@ export function StylePanel() {
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
-
-            {/* Theme */}
-            <Section icon={<SunMoon className="h-3.5 w-3.5" />} title="Theme">
-              <ThemeSwitcher />
-            </Section>
 
             {/* Layout */}
             <Section icon={<LayoutTemplate className="h-3.5 w-3.5" />} title="Layout">

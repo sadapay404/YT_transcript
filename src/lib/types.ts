@@ -288,6 +288,10 @@ export interface ThemeDefinition {
   id: ThemeId;
   label: string;
   tagline: string;
+  /** A second line of product-facing detail for the full theme gallery. */
+  detail: string;
+  /** Optional caution displayed as a distinct badge in the full gallery. */
+  warning?: string;
   scheme: ColorScheme;
   /** Three hex swatches for the theme picker preview. */
   swatch: [string, string, string];

@@ -124,6 +124,9 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
           {transcript?.languageLabel && (
             <span className="chip !py-0 !text-[9px]">{transcript.languageLabel}</span>
           )}
+          {viewMode === "read" && (
+            <span className="chip chip-accent !py-0 !text-[9px]">scroll inside</span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

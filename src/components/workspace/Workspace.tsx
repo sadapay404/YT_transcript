@@ -200,11 +200,11 @@ export function Workspace() {
                       <h1 className="truncate text-[13.5px] font-semibold text-ink">
                         {metadata?.title || (transcript?.source === "demo" ? "Demo transcript" : "Untitled video")}
                       </h1>
-                      <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11.5px] text-ink-faint">
-                        {metadata?.author && <span className="truncate">{metadata.author}</span>}
-                        {metadata?.author && <span>·</span>}
-                        <span className="font-mono">{metadata?.videoId}</span>
-                      </p>
+                      {metadata?.author && (
+                        <p className="mt-0.5 truncate text-[11.5px] text-ink-faint">
+                          {metadata.author}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -219,7 +219,7 @@ export function Workspace() {
                 "panel relative z-10 flex min-h-0 flex-col overflow-visible",
                 viewMode === "cinema" && "max-h-[70vh]",
                 viewMode === "split" && "xl:max-h-[calc(100dvh-11rem)]",
-                readingOnly && "min-h-[70vh]",
+                readingOnly && "read-mode-panel",
               )}
             >
               <TranscriptPane />

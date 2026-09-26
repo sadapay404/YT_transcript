@@ -216,7 +216,7 @@ Switching themes only writes `data-theme` on `<html>` — **no React re-render, 
 `curl -H 'Cookie: transtudio.prefs=…' localhost:3000` returning
 `<html data-theme="cyberpunk" data-scheme="dark">` server-side. Zen Paper is the default.
 
-Themes: **Pure OLED** (`#000000`, default) · **Cyberpunk** (neon magenta/cyan) · **Aurora Glass** (frosted panels over drifting gradients) · **Zen Paper** (warm light reading mode).
+Themes: **Pure OLED** (`#000000`) · **Cyberpunk** (neon magenta/cyan) · **Liquid Glass (Definitly not inspired 😶)** (frosted panels over drifting gradients; **May Lag on Your PC.**) · **Zen Paper** (warm light reading mode, default).
 
 ### Typography Studio
 

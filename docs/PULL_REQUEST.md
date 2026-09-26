@@ -14,8 +14,8 @@ AI clipping and export studio (Next.js 16 + Gemini).
 - Next.js 16 App Router + React 19 + Tailwind v4 + Framer Motion + Zustand.
 - Shared contracts in `src/lib/types.ts`: transcript payloads, chat streaming
   events, the clipper JSON shape (`RawClip` → `ViralClip`), exports, playback.
-- Four complete themes (Pure OLED, Cyberpunk, Aurora Glass, Zen Paper) as ~22
-  CSS variables per theme, bridged into Tailwind with `@theme inline`, applied
+- Four complete themes (Pure OLED, Cyberpunk, Liquid Glass (Definitly not inspired 😶),
+  Zen Paper) as ~22 CSS variables per theme, bridged into Tailwind with `@theme inline`, applied
   from the settings store with zero React re-renders and no pre-paint flash.
 - Typography Studio (Inter / Source Serif 4 / OpenDyslexic), 16-tint clip
   palette, `layoutId` view-mode transitions, self-hosted fonts, PWA manifest.
