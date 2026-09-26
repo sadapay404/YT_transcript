@@ -53,6 +53,17 @@ jobs:
           & npx electron-builder --win --publish never 2>&1 | Tee-Object -FilePath electron-builder.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Surface electron-builder failure
+        if: failure()
+        shell: pwsh
+        run: |
+          if (Test-Path electron-builder.log) {
+            $log = (Get-Content electron-builder.log -Raw).Trim()
+            $escaped = $log.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error file=electron-builder.log,line=1,title=electron-builder::$escaped"
+          }
+          exit 1
+
       - name: Upload desktop build diagnostics
         if: always()
         uses: actions/upload-artifact@v5
