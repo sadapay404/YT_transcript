@@ -113,6 +113,13 @@ Replaced with a ladder that tries identities and says what it did:
   (N)"*, the transcript header shows the winning strategy, and `/status` reports
   `strategy` + `attempts`. "No transcript" is never a silent verdict.
 - Whole-ladder time budget: a blocked host fails fast with an explanation.
+- When that environmental demo fallback is returned, the client automatically
+  tries `src/lib/transcript/browser-captions.ts` from the visitor's connection.
+  A successful read hydrates the real transcript with `source: "browser"` and a
+  `browser:<format>` strategy. CORS, private/authenticated videos and ordinary
+  network failures remain honest: the demo stays usable, and paste plus the
+  manual **Try from my connection** action remain available without blaming the
+  video.
 - `TRANSCRIPT_PROXY_URL` now covers **every** request (Innertube POSTs, signed
   and unsigned `timedtext`, watch page) — previously only the library path.
 - Restored the **"Read it. Clip it. Ship it."** slogan as the animated

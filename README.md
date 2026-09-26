@@ -4,7 +4,7 @@
 
 Turn any YouTube video into a **synchronized, readable transcript**, then let **Google Gemini** find the viral moments and paint them straight onto the text as colour-coded, playable, copyable clips.
 
-- **100% free to run** — no credit card, ever. YouTube captions are scraped server-side (`youtube-transcript`), so no YouTube Data API quota is involved. The AI runs on the Gemini **free tier** (no card required). Fonts are self-hosted. Deploy free on Vercel.
+- **100% free to run** — no credit card, ever. YouTube captions use a server-side ladder (`youtube-transcript` plus direct formats), with a best-effort visitor-browser fallback when a datacenter IP is blocked; no YouTube Data API quota is involved. The AI runs on the Gemini **free tier** (no card required). Fonts are self-hosted. Deploy free on Vercel.
 - **Zero-cost defaults** — no analytics, no third-party trackers, no paid image optimizer.
 
 ---
@@ -106,17 +106,19 @@ src/
 │  ├─ utils.ts            # timecodes, URL parsing, formatters
 │  ├─ health.ts           # deployment diagnostics + self-tests
 │  ├─ gemini/client.ts    # Gemini client factory + error taxonomy (server only)
-│  └─ youtube/
-│     ├─ fetch.ts         # ⭐ the engine: strategy ladder → normalise → payload (+ demo fallback)
-│     ├─ captions.ts      # ⭐ multi-client caption ladder + per-attempt diagnostics (tested)
-│     ├─ clients.ts       # Innertube client identities, proxy fetcher, timedtext URLs (tested)
-│     ├─ parse.ts         # json3 / srv3 / classic-XML / WebVTT parsers, unit-exact (tested)
-│     ├─ metadata.ts      # title/author/duration/caption tracks (InnerTube → oEmbed)
-│     ├─ normalize.ts     # ms-vs-seconds handling, self-healing detection (tested)
-│     ├─ sync.ts          # playhead ↔ line maths: active line, scroll targets (tested)
-│     ├─ follow.ts        # is the reader still letting us scroll? gestures vs drift (tested)
-│     ├─ demo.ts          # bundled demo transcript (never a dead end)
-│     └─ probe.ts         # caption fetch probe + error classification
+│  ├─ youtube/
+│  │  ├─ fetch.ts         # ⭐ the engine: strategy ladder → normalise → payload (+ demo fallback)
+│  │  ├─ captions.ts      # ⭐ multi-client caption ladder + per-attempt diagnostics (tested)
+│  │  ├─ clients.ts       # Innertube client identities, proxy fetcher, timedtext URLs (tested)
+│  │  ├─ parse.ts         # json3 / srv3 / classic-XML / WebVTT parsers, unit-exact (tested)
+│  │  ├─ metadata.ts      # title/author/duration/caption tracks (InnerTube → oEmbed)
+│  │  ├─ normalize.ts     # ms-vs-seconds handling, self-healing detection (tested)
+│  │  ├─ sync.ts          # playhead ↔ line maths: active line, scroll targets (tested)
+│  │  ├─ follow.ts        # is the reader still letting us scroll? gestures vs drift (tested)
+│  │  ├─ demo.ts          # bundled demo transcript (never a dead end)
+│  │  └─ probe.ts         # caption fetch probe + error classification
+│  └─ transcript/
+│     └─ browser-captions.ts # visitor-connection fallback (CORS permitting)
 ├─ hooks/
 │  └─ useFollowAlong.ts   # ⭐ Step 3: auto-scroll follow, takeover detection, resume
 ├─ providers/ThemeProvider.tsx   # settings → <html> data-attributes + CSS variables
@@ -158,6 +160,13 @@ explanation instead of hanging.
 
 Every attempt is surfaced in the UI (*"What was tried (N)"*) and in
 `/status` (`Strategy`, `attempts`), so "no transcript" is never a silent verdict.
+
+When the server ladder returns the environmental demo, the browser makes one
+best-effort request from the visitor's own connection and replaces the demo if
+YouTube allows the caption read. Direct reads are subject to YouTube's CORS
+policy, private/authenticated videos and ordinary network failures; if that
+request is refused, the demo stays usable and the UI keeps paste and manual
+browser-retry remedies visible.
 
 `scripts/fake-youtube.mjs` reproduces the failure locally — it bot-walls the WEB
 identity exactly like a datacenter IP — and the opt-in integration suite proves
@@ -243,6 +252,6 @@ npx vitest run --config vitest.verify.config.ts
 ## Free-tier notes
 
 - **Gemini free tier**: `gemini-2.5-flash` gives a 1M-token context (a 3-hour transcript fits in ~40k tokens) and a generous daily request quota. A `.env.local` key is all you need — and if the key is missing, the UI degrades gracefully instead of crashing.
-- **Captions**: `youtube-transcript` hits YouTube's InnerTube endpoint (with an HTML fallback). No key, no quota — but *some* datacenter IP ranges get rate-limited, so Step 2 supports an optional `TRANSCRIPT_PROXY_URL`.
-- **Hosting**: deploy to Vercel's free plan — the scraper runs in a server action, so captions never hit CORS.
+- **Captions**: the server ladder hits YouTube's InnerTube endpoint (with direct-format and HTML fallbacks). No key, no quota — but *some* datacenter IP ranges get rate-limited, so the app then makes a best-effort visitor-browser read. YouTube may still refuse that cross-origin request, so paste and retry remain available; `TRANSCRIPT_PROXY_URL` is the server-side escape hatch.
+- **Hosting**: deploy to Vercel's free plan — the server action remains the first path, while the browser fallback uses the visitor's own connection only when the server is environmentally blocked (CORS permitting).
 - **Fair use**: this tool is for reading, research and clipping content you have the right to use. Respect YouTube's Terms of Service and creators' rights.

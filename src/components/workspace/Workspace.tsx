@@ -42,6 +42,7 @@ export function Workspace() {
   const rootRef = useRef<HTMLDivElement>(null);
 
   const hasTranscript = Boolean(transcript && transcript.segments.length > 0);
+  const canTryBrowser = transcript?.source === "demo" && notice?.includes("This host cannot");
   const readingOnly = viewMode === "read";
 
   /** False while the studio renders nothing — the landing owns that state. */
@@ -115,7 +116,29 @@ export function Workspace() {
       <AnimatePresence initial={false}>
         {notice && hasTranscript && (
           <Notice tone="info" icon={<Info className="h-3.5 w-3.5" />}>
-            {notice} The app stays fully usable — reading, seeking and exporting all work.
+            <div className="flex flex-col gap-2">
+              <span>{notice} The app stays fully usable — reading, seeking and exporting all work.</span>
+              {canTryBrowser && (
+                <span className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void fetchInBrowser()}
+                    className="btn btn-primary h-8 gap-1.5 px-2.5 text-[11px]"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Try from my connection
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openPaste}
+                    className="btn h-8 gap-1.5 border border-line px-2.5 text-[11px]"
+                  >
+                    <ClipboardPaste className="h-3 w-3" />
+                    Paste a transcript
+                  </button>
+                </span>
+              )}
+            </div>
           </Notice>
         )}
       </AnimatePresence>
@@ -257,7 +280,7 @@ function Notice({
       )}
     >
       <span className="mt-0.5 shrink-0 text-accent">{icon}</span>
-      <span>{children}</span>
+      <div className="min-w-0">{children}</div>
     </motion.div>
   );
 }

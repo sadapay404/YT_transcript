@@ -56,7 +56,13 @@ interface TranscriptState {
   /** Turn pasted text (YouTube panel, .srt/.vtt, notes) into the active transcript. */
   loadFromPaste: (text: string, label?: string) => { ok: boolean; message: string };
   /** Read a caption track from the visitor's own connection. */
-  fetchInBrowser: () => Promise<{ ok: boolean; message: string }>;
+  fetchInBrowser: (options?: {
+    silent?: boolean;
+    timeoutMs?: number;
+    /** Internal target used by the automatic fallback after a server demo. */
+    videoId?: string;
+    expectedInput?: string;
+  }) => Promise<{ ok: boolean; message: string }>;
   extract: (input: string) => Promise<void>;
   retry: () => Promise<void>;
   loadDemo: () => Promise<void>;
@@ -137,72 +143,129 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     }
   },
 
-  fetchInBrowser: async () => {
+  fetchInBrowser: async (options = {}) => {
     // A failed extract clears metadata, but the URL the visitor typed is still
-    // in the store — that is the video whose captions we should ask for.
+    // in the store — that is the video whose captions we should ask for. A demo
+    // fallback also keeps the requested URL in `input`, so do not mistake the
+    // bundled demo id for the real target.
     const stored = get().metadata?.videoId;
     const videoId =
-      stored && stored !== "pasted" ? stored : parseYouTubeUrl(get().input)?.videoId;
+      options.videoId ??
+      (stored && stored !== "pasted" && stored !== "transtudio-demo"
+        ? stored
+        : parseYouTubeUrl(get().input)?.videoId);
     if (!videoId) {
       return { ok: false, message: "Load a video first, then fetch its captions from your connection." };
     }
-    if (!stored || stored === "pasted") {
-      set({
-        metadata: {
-          videoId,
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          thumbnailUrl: "",
-        },
+
+    const fallbackNotice = get().notice;
+    const hadDemoTranscript = get().transcript?.source === "demo";
+    const isCurrentRequest = () =>
+      !options.expectedInput || get().input === options.expectedInput;
+    const finishBrowserFailure = (reason: string, attempts: string[]) => {
+      if (!isCurrentRequest()) return { ok: false, message: reason };
+
+      const notice =
+        `${fallbackNotice ?? "The server could not load this video's captions."} ` +
+        "A direct browser read was not available — YouTube, CORS, or the network refused the request. " +
+        "The demo remains usable; paste a transcript or choose “Try from my connection” to retry.";
+
+      if (options.silent || hadDemoTranscript) {
+        set((state) => ({
+          status: "success",
+          error: null,
+          diagnostics: [...state.diagnostics, ...attempts],
+          notice,
+        }));
+      } else {
+        set({
+          status: "error",
+          diagnostics: attempts,
+          error: {
+            code: "blocked",
+            message: reason,
+            hint: "YouTube does not always allow a page to read captions directly. Open the video, choose “Show transcript”, copy it all, and paste it here — that path always works.",
+            diagnostics: attempts,
+          },
+        });
+      }
+      return { ok: false, message: reason };
+    };
+
+    if (!isCurrentRequest()) {
+      return { ok: false, message: "The video changed before the browser request finished." };
+    }
+    set({ status: "loading", error: null });
+
+    let result: Awaited<ReturnType<typeof fetchCaptionsInBrowser>>;
+    try {
+      result = await fetchCaptionsInBrowser(videoId, {
+        lang: get().transcript?.language,
+        timeoutMs: options.timeoutMs ?? 8_000,
       });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "The browser caption request failed.";
+      return finishBrowserFailure(reason, [`✗ browser — ${reason}`]);
     }
 
-    set({ status: "loading", error: null });
-    const result = await fetchCaptionsInBrowser(videoId, { lang: get().transcript?.language });
-
     if (!result.ok) {
-      set({
-        status: "error",
-        diagnostics: result.attempts,
-        error: {
-          code: "blocked",
-          message: result.reason,
-          hint: "YouTube does not always allow a page to read captions directly. Open the video, choose \u201cShow transcript\u201d, copy it all, and paste it here — that path always works.",
-          diagnostics: result.attempts,
-        },
-      });
-      return { ok: false, message: result.reason };
+      return finishBrowserFailure(result.reason, result.attempts);
+    }
+
+    if (!isCurrentRequest()) {
+      return { ok: false, message: "The video changed before the browser request finished." };
     }
 
     const text = result.segments.map((segment) => segment.text).join(" ");
-    set((state) => ({
-      status: "success",
-      error: null,
-      clips: [],
-      diagnostics: result.attempts,
-      notice: "Captions came from your own connection — this server's IP is blocked by YouTube, but yours is not.",
-      lastFetchedAt: Date.now(),
-      transcript: state.transcript
-        ? {
-            ...state.transcript,
-            source: "browser",
-            strategy: `browser:${result.format}`,
-            language: result.language,
-            languageLabel: `${result.language} (from your browser)`,
-            segments: result.segments,
-            text,
-            wordCount: countWords(text),
-            characterCount: text.length,
-            durationSeconds: result.segments.at(-1)?.end ?? 0,
-            fetchedAt: new Date().toISOString(),
-          }
-        : null,
-    }));
+    set((state) => {
+      const existingMetadata = state.metadata?.videoId === videoId ? state.metadata : undefined;
+      const previousTranscript = state.transcript;
+      const fromDemo = previousTranscript?.source === "demo";
+      const startAt = existingMetadata?.startAt ?? parseYouTubeUrl(get().input)?.startAt;
+      const url = `https://www.youtube.com/watch?v=${videoId}`;
+
+      return {
+        status: "success" as const,
+        error: null,
+        clips: [],
+        metadata: {
+          ...(existingMetadata ?? {}),
+          videoId,
+          url,
+          thumbnailUrl:
+            existingMetadata?.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          ...(typeof startAt === "number" ? { startAt } : {}),
+        },
+        diagnostics: result.attempts,
+        notice: fromDemo
+          ? "Captions came from your own connection — YouTube blocked the server path, but the browser path succeeded."
+          : "Captions came from your own connection.",
+        lastFetchedAt: Date.now(),
+        transcript: {
+          videoId,
+          title: fromDemo ? undefined : previousTranscript?.title,
+          url,
+          language: result.language,
+          languageLabel: `${result.language} (from your browser)`,
+          isAutoGenerated: fromDemo ? false : previousTranscript?.isAutoGenerated ?? false,
+          source: "browser",
+          strategy: `browser:${result.format}`,
+          segments: result.segments,
+          text,
+          wordCount: countWords(text),
+          characterCount: text.length,
+          durationSeconds: result.segments.at(-1)?.end ?? 0,
+          fetchedAt: new Date().toISOString(),
+        },
+      };
+    });
     return { ok: true, message: "Captions loaded from your connection." };
   },
 
   extract: async (input: string) => {
     const trimmed = input.trim();
     if (!trimmed) return;
+    const requestedVideoId = parseYouTubeUrl(trimmed)?.videoId;
 
     set({
       status: "loading",
@@ -217,6 +280,35 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     try {
       const result = await extractTranscriptAction(trimmed);
       applyResult(result, set);
+
+      // The server remains the first path. Its demo result is an environmental
+      // fallback, not an answer about the requested video, so give the visitor
+      // one best-effort read from their own connection before settling on demo.
+      if (result.ok && result.transcript.source === "demo" && requestedVideoId) {
+        try {
+          await get().fetchInBrowser({
+            silent: true,
+            timeoutMs: 8_000,
+            videoId: requestedVideoId,
+            expectedInput: trimmed,
+          });
+        } catch (error) {
+          // Keep the usable demo even if a future browser helper throws outside
+          // its typed failure result. Never turn an environmental failure into
+          // a claim that the requested video itself is broken.
+          const reason = error instanceof Error ? error.message : "the browser request failed";
+          if (get().input === trimmed && get().transcript?.source === "demo") {
+            set({
+              status: "success",
+              error: null,
+              notice:
+                `${get().notice ?? "The server could not load this video's captions."} ` +
+                `A direct browser read was not available — YouTube, CORS, or the network refused the request (${reason}). ` +
+                "The demo remains usable; paste a transcript or choose “Try from my connection” to retry.",
+            });
+          }
+        }
+      }
     } catch (error) {
       set({
         status: "error",

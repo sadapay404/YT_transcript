@@ -130,7 +130,7 @@ export async function fetchCaptionsInBrowser(
   return {
     ok: false,
     reason:
-      "Your browser reached YouTube, but YouTube did not allow this page to read the captions.",
+      "The browser could not read YouTube's captions. YouTube, CORS, or the network may have refused the request.",
     attempts,
   };
 }
