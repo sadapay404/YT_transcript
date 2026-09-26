@@ -44,3 +44,6 @@ next-env.d.ts
 
 # TranStudio Connector zip (built by scripts/pack-connector.mjs on prebuild)
 /public/transtudio-connector.zip
+
+# Built-in AI keys for the desktop app
+/electron/bundled-keys.dat
