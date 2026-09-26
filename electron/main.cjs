@@ -205,6 +205,9 @@ async function createWindow(url) {
     minHeight: 700,
     show: false,
     backgroundColor: "#f4f0e8",
+    // Set the window icon explicitly as well as electron-builder's installer
+    // icon. Windows uses this value for the taskbar identity at runtime.
+    icon: path.join(__dirname, "icon.ico"),
     title: "TranStudio — Read it. Clip it. Ship it.",
     webPreferences: {
       contextIsolation: true,
