@@ -317,20 +317,24 @@ for live captions set `TRANSCRIPT_PROXY_URL` (it is applied to *every* request:
 Innertube POSTs, signed and unsigned `timedtext`, and the watch page) or deploy
 somewhere with a residential-grade egress.
 
-## Renaming the project (e.g. to `transtudio.vercel.app`)
+## Getting `transtudio.vercel.app` (or any `*.vercel.app` name)
 
-The project name is independent of git: it does **not** matter which branch is
-Production, and renaming never touches commits, deployments, environment
-variables or protection settings. Only the `.vercel.app` hostnames change.
+`*.vercel.app` names are free, global and first come, first served. Renaming
+the project alone is **not** enough: Vercel doesn't promise to move the
+production address when you rename. Add the address explicitly:
 
-1. Project → **Settings → General → Project Name** → `transtudio` → Save.
-2. Production then serves **`transtudio.vercel.app`**, and branch previews become
-   `transtudio-git-<branch>-….vercel.app`. Existing deployment URLs (the ones with
-   a build hash) keep working.
-3. If the name is already taken — every `*.vercel.app` name is global — pick
-   another, or add a custom domain you own: Project → **Settings → Domains**.
-4. Update any bookmarks, and if you had shared the old preview link, share the new
-   one.
+1. Project → **Settings → Domains** → **Add Domain** → `transtudio.vercel.app`
+   → **Add**. If Vercel says it's taken, pick another name.
+2. Optional (tidier preview URLs): **Settings → General → Project Name** →
+   `transtudio` → Save. Git, env vars and deployments are unaffected.
+3. To retire the old address, open the menu next to it on the **Domains** page
+   and choose **Remove**.
+4. **Settings → Deployment Protection**: keep **Vercel Authentication** set to
+   *Standard Protection*. Old deployments then stay private to you, and only
+   the production domain is public.
+
+A domain always serves the **latest production deployment**, which means the
+newest commit on `main`.
 
 ## Environment variables (all optional except the first)
 
