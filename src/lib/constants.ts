@@ -30,6 +30,7 @@ export const THEMES: ThemeDefinition[] = [
     detail: "A quiet, pixel-saving reading room for late-night focus.",
     scheme: "dark",
     swatch: ["#000000", "#121218", "#8b93ff"],
+    ink: "#ffffff",
   },
   {
     id: "cyberpunk",
@@ -38,6 +39,7 @@ export const THEMES: ThemeDefinition[] = [
     detail: "A kinetic studio treatment for clips, cuts and bold ideas.",
     scheme: "dark",
     swatch: ["#06030d", "#ff2fb9", "#22d3ee"],
+    ink: "#ff5fcb",
   },
   {
     id: "glass",
@@ -47,15 +49,17 @@ export const THEMES: ThemeDefinition[] = [
     warning: "May Lag on Your PC.",
     scheme: "dark",
     swatch: ["#070b1a", "#7c5cff", "#22d3ee"],
+    ink: "#e9e4ff",
     signature: true,
   },
   {
     id: "zen",
-    label: "Zen Paper",
+    label: "Mubashir's Favourite Zen Paper",
     tagline: "Warm ink on cream paper. Distraction-free reading.",
     detail: "The default reading desk: tactile paper, calm contrast and warm ink.",
     scheme: "light",
     swatch: ["#f6f0e4", "#2f2a23", "#b0562c"],
+    ink: "#2f2a23",
   },
 ];
 
@@ -463,10 +467,6 @@ export const PREFERENCES_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 export const STORAGE_KEYS = {
   chat: "transtudio.chat.v1",
 } as const;
-
-/* ──────────────────────────── Input helpers ─────────────────────────────── */
-
-export const DEMO_URL = "https://www.youtube.com/watch?v=aircAruvnKk";
 
 export const SUGGESTED_PROMPTS = [
   "Summarize this video in 5 bullets.",

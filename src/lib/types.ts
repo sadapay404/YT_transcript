@@ -295,6 +295,8 @@ export interface ThemeDefinition {
   scheme: ColorScheme;
   /** Three hex swatches for the theme picker preview. */
   swatch: [string, string, string];
+  /** Readable text colour on the preview card (swatch[0] background). */
+  ink: string;
   /** Featured theme shown as a "signature" card in the picker. */
   signature?: boolean;
 }

@@ -140,7 +140,11 @@ export const TranscriptLine = memo(
   TranscriptLineComponent,
   (prev, next) =>
     prev.active === next.active &&
-    prev.segment.id === next.segment.id &&
+    // Compare the segment object, not only its id: every transcript numbers its
+    // lines from 0, so an id-only check let a new video's lines keep the old
+    // video's text until something else forced them to re-render.
+    prev.segment === next.segment &&
+    prev.onSeek === next.onSeek &&
     prev.index === next.index &&
     prev.showTimestamp === next.showTimestamp &&
     prev.forceHours === next.forceHours &&

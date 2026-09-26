@@ -19,6 +19,7 @@ import { UrlBar } from "@/components/workspace/UrlBar";
 import { TranscriptPane } from "@/components/workspace/TranscriptPane";
 import { VideoPane } from "@/components/workspace/VideoPane";
 import { AssistantPanel } from "@/components/assistant/AssistantPanel";
+import { useCinemaFrame } from "@/hooks/useCinemaFrame";
 import { usePlaybackStore } from "@/stores/usePlaybackStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useTranscriptStore } from "@/stores/useTranscriptStore";
@@ -44,6 +45,11 @@ export function Workspace() {
   const hasTranscript = Boolean(transcript && transcript.segments.length > 0);
   const canTryBrowser = transcript?.source === "demo" && notice?.includes("This host cannot");
   const readingOnly = viewMode === "read";
+  const cinema = viewMode === "cinema";
+  const cinemaFrame = useCinemaFrame({
+    enabled: cinema && hasTranscript,
+    resetKey: transcript ? `${transcript.videoId}@${transcript.fetchedAt}` : "empty",
+  });
 
   /** False while the studio renders nothing — the landing owns that state. */
   const mounted = status !== "idle" || hasTranscript;
@@ -162,19 +168,22 @@ export function Workspace() {
         ) : (
           <motion.div
             key="studio"
+            ref={cinema ? cinemaFrame.frameRef : undefined}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
+            data-cinema-frame={cinema ? "" : undefined}
             className={cn(
-              "grid min-h-0 flex-1 gap-3",
+              "min-h-0 flex-1 gap-3",
               // Split: side-by-side, transcript rail beside the player.
               viewMode === "split" &&
-                "xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]",
-              // Cinema: player full width on top, transcript as a wide rail below.
-              viewMode === "cinema" && "grid-cols-1",
+                "grid xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]",
+              // Cinema: a viewport-bounded frame. The player always fits and
+              // shrinks as you scroll; the transcript scrolls inside the rest.
+              cinema && "flex h-[calc(100dvh-4.5rem)] min-h-[26rem] flex-col",
               // Read: transcript only, centred to a comfortable measure.
-              readingOnly && "mx-auto w-full max-w-3xl grid-cols-1",
+              readingOnly && "mx-auto grid w-full max-w-3xl grid-cols-1",
             )}
           >
             {/* Player */}
@@ -182,15 +191,24 @@ export function Workspace() {
               {!readingOnly && (
                 <motion.div
                   key="player-pane"
-                  layout
+                  ref={cinema ? cinemaFrame.playerRef : undefined}
+                  // Cinema resizes continuously with scroll; a layout
+                  // animation there would scale the iframe and lag behind.
+                  layout={!cinema}
                   initial={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.97 }}
                   transition={SPRING}
                   className={cn(
-                    "panel relative z-0 overflow-visible xl:sticky xl:top-[3.75rem] xl:self-start",
-                    viewMode === "cinema" && "mx-auto w-full max-w-5xl",
+                    "panel relative z-0 overflow-visible",
+                    viewMode === "split" && "xl:sticky xl:top-[3.75rem] xl:self-start",
+                    cinema && "mx-auto w-full max-w-5xl shrink-0",
                   )}
+                  style={
+                    cinema && cinemaFrame.ready
+                      ? { width: cinemaFrame.geometry.playerWidth, maxWidth: "100%" }
+                      : undefined
+                  }
                 >
                   <VideoPane />
 
@@ -213,11 +231,11 @@ export function Workspace() {
 
             {/* Transcript */}
             <motion.div
-              layout
+              layout={!cinema}
               transition={SPRING}
               className={cn(
                 "panel relative z-10 flex min-h-0 flex-col overflow-visible",
-                viewMode === "cinema" && "max-h-[70vh]",
+                cinema && "mx-auto w-full max-w-5xl flex-1",
                 viewMode === "split" && "xl:max-h-[calc(100dvh-11rem)]",
                 readingOnly && "read-mode-panel",
               )}
@@ -231,7 +249,7 @@ export function Workspace() {
       <AssistantPanel />
 
       {/* ── Shortcut hint ───────────────────────────────────────────────── */}
-      {hasTranscript && (
+      {hasTranscript && !readingOnly && (
         <p className="hidden items-center justify-center gap-3 pb-1 text-[11px] text-ink-faint md:flex">
           <span className="inline-flex items-center gap-1">
             <Keyboard className="h-3 w-3" />

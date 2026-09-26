@@ -1,12 +1,12 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Activity, PanelRight } from "lucide-react";
 
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { StylePanel } from "@/components/layout/StylePanel";
+import { TranStudioMark } from "@/components/layout/TranStudioLogo";
 import { ViewModeSwitch } from "@/components/layout/ViewModeSwitch";
 import { ExportMenu } from "@/components/export/ExportMenu";
 import { useSettingsStore } from "@/stores/useSettingsStore";
@@ -30,14 +30,8 @@ export function StudioHeader() {
               animate={{ opacity: [0.35, 0.8, 0.35] }}
               transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
             />
-            <Image
-              src="/logo-mark.png"
-              alt=""
-              width={32}
-              height={32}
-              priority
-              className="relative h-full w-full rounded-[0.6rem] object-cover"
-            />
+            {/* Book only — the name is already written beside it. */}
+            <TranStudioMark className="relative h-[26px] w-[26px]" />
           </span>
           <span className="flex flex-col leading-none">
             <span className="text-gradient text-[15px] font-bold tracking-tight">

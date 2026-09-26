@@ -3,13 +3,12 @@
 /**
  * The one input that matters: paste a link, get a transcript.
  * Validates locally (instant feedback, no round trip) and keeps the primary
- * recovery paths — example link and paste — close to the input.
+ * recovery path — paste — close to the input.
  */
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, ClipboardPaste, Link2, Loader2, X } from "lucide-react";
 
-import { DEMO_URL } from "@/lib/constants";
 import { cn, parseYouTubeUrl } from "@/lib/utils";
 import { useTranscriptStore } from "@/stores/useTranscriptStore";
 
@@ -168,19 +167,6 @@ export function UrlBar({ autoFocus = false }: { autoFocus?: boolean }) {
             </motion.p>
           )}
         </AnimatePresence>
-
-        <button
-          type="button"
-          onClick={() => {
-            setValue(DEMO_URL);
-            setTouched(true);
-          }}
-          className="text-[11.5px] text-ink-faint underline decoration-dotted transition-colors hover:text-ink-soft"
-        >
-          use an example link
-        </button>
-
-        <span className="text-ink-faint/50">·</span>
 
         <button
           type="button"

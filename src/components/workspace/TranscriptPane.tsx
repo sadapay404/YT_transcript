@@ -69,6 +69,8 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
     return map;
   }, [clips]);
 
+  const transcriptKey = transcript ? `${transcript.videoId}@${transcript.fetchedAt}` : "empty";
+
   const { paused, resume, containerRef } = useFollowAlong({
     segments,
     activeIndex,
@@ -76,7 +78,7 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
     center: centerActiveLine,
     reduceMotion,
     // New material ⇒ following starts over, however the last read ended.
-    resetKey: transcript ? `${transcript.videoId}@${transcript.fetchedAt}` : "empty",
+    resetKey: transcriptKey,
     // A reflow moves the rail legitimately; don't read it as a takeover.
     reflowKey: `${viewMode}|${fontFamily}|${fontSize}|${lineHeight}|${letterSpacing}|${measure}`,
   });
@@ -146,6 +148,7 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
       <div className="relative z-0 min-h-0 flex-1">
         <div
           ref={containerRef}
+          data-transcript-rail
           className="fade-y h-full overflow-y-auto overscroll-contain px-2 py-3 sm:px-3"
         >
           {segments.length === 0 ? (
@@ -153,10 +156,10 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
               No transcript loaded yet.
             </p>
           ) : (
-            <ol className="reading-type mx-auto flex flex-col gap-[0.35em]">
+            <ol key={transcriptKey} className="reading-type mx-auto flex flex-col gap-[0.35em]">
               {segments.map((segment, index) => (
                 <TranscriptLine
-                  key={segment.id}
+                  key={`${transcriptKey}:${segment.id}`}
                   segment={segment}
                   index={index}
                   active={index === activeIndex}

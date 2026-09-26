@@ -43,6 +43,7 @@ export function ThemeGallery() {
               active
                 ? "border-accent/60 shadow-[0_18px_60px_-30px_var(--glow)]"
                 : "border-line hover:border-line-strong",
+              definition.id === "oled" && "!border-white/70",
             )}
             style={{ background: definition.swatch[0] }}
           >
@@ -59,9 +60,9 @@ export function ThemeGallery() {
               <span
                 className="flex h-8 w-8 items-center justify-center rounded-lg border"
                 style={{
-                  borderColor: `${definition.swatch[1]}40`,
-                  background: `${definition.swatch[1]}22`,
-                  color: definition.swatch[1],
+                  borderColor: `${definition.ink}55`,
+                  background: `${definition.ink}1f`,
+                  color: definition.ink,
                 }}
               >
                 {ICONS[definition.id]}
@@ -74,18 +75,18 @@ export function ThemeGallery() {
             </span>
 
             <span className="relative mt-8 block">
-              <span className="block text-[13.5px] font-bold" style={{ color: definition.swatch[1] }}>
+              <span className="block text-[13.5px] font-bold" style={{ color: definition.ink }}>
                 {definition.label}
               </span>
               <span
                 className="mt-0.5 block text-[11px] leading-snug"
-                style={{ color: `${definition.swatch[1]}aa` }}
+                style={{ color: `${definition.ink}cc` }}
               >
                 {definition.tagline}
               </span>
               <span
                 className="mt-1.5 block text-[10px] leading-snug"
-                style={{ color: `${definition.swatch[1]}88` }}
+                style={{ color: `${definition.ink}99` }}
               >
                 {definition.detail}
               </span>
@@ -106,7 +107,7 @@ export function ThemeGallery() {
               ))}
               <span
                 className="ml-1 font-mono text-[9.5px] tracking-wide uppercase"
-                style={{ color: `${definition.swatch[1]}88` }}
+                style={{ color: `${definition.ink}99` }}
               >
                 {definition.id}
               </span>

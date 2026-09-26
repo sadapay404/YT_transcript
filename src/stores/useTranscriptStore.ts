@@ -62,12 +62,21 @@ interface TranscriptState {
     /** Internal target used by the automatic fallback after a server result. */
     videoId?: string;
     expectedInput?: string;
+    /** Internal load token; stale browser reads are discarded. */
+    loadId?: number;
   }) => Promise<{ ok: boolean; message: string }>;
   extract: (input: string) => Promise<void>;
   retry: () => Promise<void>;
   loadDemo: () => Promise<void>;
   reset: () => void;
 }
+
+/**
+ * Monotonic id for transcript loads. The URL field is editable while a request
+ * is in flight, so the field value cannot identify the latest request; this
+ * counter can. A slower, older response must never replace a newer video.
+ */
+let latestLoad = 0;
 
 export const useTranscriptStore = create<TranscriptState>((set, get) => ({
   status: "idle",
@@ -93,6 +102,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     try {
       const parsed = parsePastedTranscript(text);
       const stamp = new Date().toISOString();
+      // A pasted transcript supersedes any fetch that is still in flight.
+      latestLoad += 1;
 
       set({
         status: "success",
@@ -160,8 +171,10 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
     const fallbackNotice = get().notice;
     const hadDemoTranscript = get().transcript?.source === "demo";
-    const isCurrentRequest = () =>
-      !options.expectedInput || get().input === options.expectedInput;
+    // An automatic read belongs to the extract that started it; a manual read
+    // becomes the newest load itself. Either way, only the newest may write.
+    const loadId = options.loadId ?? ++latestLoad;
+    const isCurrentRequest = () => loadId === latestLoad;
     const finishBrowserFailure = (reason: string, attempts: string[]) => {
       if (!isCurrentRequest()) return { ok: false, message: reason };
 
@@ -265,6 +278,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     const trimmed = input.trim();
     if (!trimmed) return;
     const requestedVideoId = parseYouTubeUrl(trimmed)?.videoId;
+    const loadId = ++latestLoad;
+    const isLatest = () => loadId === latestLoad;
 
     set({
       status: "loading",
@@ -278,6 +293,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
     try {
       const result = await extractTranscriptAction(trimmed);
+      if (!isLatest()) return;
       applyResult(result, set);
 
       // The server remains the first path. A demo is an environmental fallback,
@@ -289,7 +305,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         requestedVideoId &&
           (result.ok ? result.transcript.source === "demo" : result.error !== "invalid-url"),
       );
-      if (shouldTryBrowser && requestedVideoId) {
+      if (shouldTryBrowser && requestedVideoId && isLatest()) {
         const preservingDemo = result.ok && result.transcript.source === "demo";
         try {
           await get().fetchInBrowser({
@@ -297,12 +313,13 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
             timeoutMs: 8_000,
             videoId: requestedVideoId,
             expectedInput: trimmed,
+            loadId,
           });
         } catch (error) {
           // Keep the server's typed result if a future browser helper throws
           // outside its typed failure result. Never turn an environmental
           // failure into a claim that the requested video itself is broken.
-          if (get().input === trimmed) {
+          if (isLatest()) {
             applyResult(result, set);
             if (preservingDemo) {
               const reason =
@@ -318,6 +335,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         }
       }
     } catch (error) {
+      if (!isLatest()) return;
       set({
         status: "error",
         transcript: null,
@@ -340,11 +358,14 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
   },
 
   loadDemo: async () => {
+    const loadId = ++latestLoad;
     set({ status: "loading", error: null, notice: null, diagnostics: [] });
     try {
       const result = await loadDemoTranscriptAction();
+      if (loadId !== latestLoad) return;
       applyResult(result, set);
     } catch {
+      if (loadId !== latestLoad) return;
       set({
         status: "error",
         error: {
