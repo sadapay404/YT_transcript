@@ -121,9 +121,12 @@ Windows machine or inspect a completed Windows Actions run:
 9. Close the window and confirm no TranStudio Next server process remains.
 10. Uninstall and confirm the installer completes normally.
 
-Until those Windows checks are complete, the repository only proves that the
-packaging path and source configuration are present; it does not claim that a
-particular `.exe` has been installed or tested.
+The Windows Actions run [36219488278](https://github.com/sadapay404/YT_transcript/actions/runs/36219488278)
+completed the Windows build and uploaded the unsigned installer artifact. That
+proves the `.exe` can be produced on `windows-latest`, but this sandbox has not
+installed or launched it on a Windows desktop. Do not describe the installer as
+working end-to-end until the install, launch, transcript, and cleanup checks
+above have been completed.
 
 ## Boundaries
 

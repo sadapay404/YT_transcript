@@ -221,7 +221,7 @@ The complete five-step build is **not** merged yet — merge it only when the ow
 explicitly asks. Production confirmation remains a deployment/browser check,
 not a claim made from the sandbox.
 
-## Windows desktop target (not yet verified on Windows)
+## Windows desktop target (Windows build verified; install not yet verified)
 
 The same React/Next studio can be packaged as an unsigned Windows NSIS installer
 without rebuilding the UI in another toolkit:
@@ -237,11 +237,13 @@ without rebuilding the UI in another toolkit:
 - The installed server receives optional Gemini configuration from
   `%APPDATA%\\TranStudio\\.env.local`; no key is needed for transcript reading.
 
-This sandbox verified typecheck, lint, tests, the production Next build, the
-standalone payload preparation, and a local standalone server response. It has
-not installed or launched a Windows `.exe`; only a real Windows install/run
-check can establish that result. Do not merge this PR until the owner explicitly
-asks.
+The Windows Actions run [36219488278](https://github.com/sadapay404/YT_transcript/actions/runs/36219488278)
+passed on `windows-latest` through Next build, payload preparation, and NSIS
+packaging, and uploaded a 174 MB unsigned `.exe` artifact. The sandbox also
+verified typecheck, lint, tests, the production Next build, the standalone
+payload preparation, and a local standalone server response. The installer has
+not yet been installed or launched on a Windows desktop; that remains the next
+verification step. Do not merge this PR until the owner explicitly asks.
 
 Full desktop instructions and limitations are in [`docs/DESKTOP.md`](DESKTOP.md).
 
