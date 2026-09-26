@@ -126,11 +126,76 @@ live site does (real HTTP, no mocks in the ladder):
 ✓ innertube:ios        — json3, 3 lines, lang=en (asr)     → captions rendered
 ```
 
+### Step 3 — the transcript follows the voice
+
+**Follow along** now keeps the spoken line in view, and the reader always wins.
+
+- **One scroll authority.** Every jump is computed by `sync.nextScrollTop` —
+  centered when *Center the active line* is on, banded 24px clear of the sticky
+  chrome when it is off. Components never do positional arithmetic.
+- **Reduce motion is honoured**: `behavior` becomes `"auto"`, so the rail jumps
+  rather than glides. Motion is never argued with.
+- **Read mode and phones**: the rail there is not a scroller — the page is — so
+  following hands centring to `scrollIntoView` (with the same center/nearest
+  intent) instead of pretending to own a scrollbar.
+- **Long seeks are checked, not trusted.** `content-visibility: auto` lets the
+  browser measure a never-painted line from its placeholder box, so a seek
+  across an hour of video can land short. After the rail settles, the engine
+  measures again and finishes the move instantly — capped at two passes, and
+  only while following.
+- **The reader can take over.** A wheel, a touch drag, a scroll key
+  (`↑ ↓ PgUp PgDn Home End` — never `Space`, `J`/`L`, `1–3`, which are the app's
+  own shortcuts), or a dragged scrollbar that drifts more than 24px from where
+  the engine parked the rail, pauses following and raises **Resume following**
+  over the rail. Clicking it — or any line — hands the rail back. Trackpad
+  momentum after the click is absorbed by a grace window instead of instantly
+  re-pausing.
+- **The highlight travels.** The wash is a *single* element shared between lines
+  with Framer Motion's `layoutId`, so it slides from sentence to sentence
+  instead of cross-fading. CSS has called it `.active-wash` since Step 1; the
+  line is now its own stacking context, so the wash paints above the line's tint
+  and behind its words.
+- **New material starts fresh**: a new video, a pasted transcript, or switching
+  *Follow along* back on all resume following — derived from the material key,
+  so there is no state-resetting effect anywhere in the hook.
+
+Two latent Step 2 bugs surfaced while wiring this and are fixed here:
+
+1. `TranscriptPane`'s root `<section>` was a plain block inside the panel's flex
+   column, so the rail's `flex-1` scroller never had a height to scroll against —
+   long transcripts were **clipped, not scrollable**. It is now
+   `flex min-h-0 flex-1 flex-col`, which also gives every layout mode a real
+   scroller (and the page-scroll fallback above covers the modes where the panel
+   grows freely).
+2. `data-active` was rendered on the `<li>` while `.transcript-line` — and
+   therefore every `[data-active="true"]` rule — sits on the `<button>`. The
+   active line never received its full-ink colour or glow. The attribute now
+   lives on the button too.
+
+Verified: `9` new unit tests over the pure verdicts
+(`src/lib/youtube/follow.test.ts` → **169 passing, 3 skipped**), plus an opt-in
+jsdom suite that drives the real `TranscriptPane` through a synthetic 60-line
+rail — exact `nextScrollTop` targets, reduce-motion, band vs center, wheel /
+key / scrollbar-drag takeovers, the resume button's return trip, line-click
+resume, Read-mode `scrollIntoView`, and one `.active-wash` on the active line
+only:
+
+```bash
+npm i --no-save jsdom                # test-only, not an app dependency
+npx vitest run --config vitest.verify.config.ts   # 16 passed
+```
+
+No dependency, no API key, no sign-up was added; Zen Paper is still the default
+theme, the name is still TranStudio and the slogan is still
+**Read it. Clip it. Ship it.**
+
 ## Next
 
-- **Step 3** — sync engine: auto-scroll follow (with resume), kinetic liquid highlight.
 - **Step 4** — Gemini chat sidebar with the transcript injected as context.
 - **Step 5** — viral clipper: structured JSON clips → colour-coded transcript bands with copy/loop-play, plus the export menu.
+
+> This PR is Step 3 only. It is **not** merged yet — merge it when the preview
+> looks right.
 
 ## Deployment prerequisites (Vercel)
 
@@ -159,9 +224,9 @@ Full diagnosis and the dashboard click-path live in
 ## Verification
 
 ```bash
-npm run test       # 135 unit tests (+3 live integration tests, opt-in)
-npm run lint
-npm run typecheck
+npm run test       # 169 unit tests (+3 live integration tests, opt-in)
+npm run lint       # zero warnings
+npm run typecheck  # next typegen + tsc --noEmit
 npm run build && npm start
 # then open http://localhost:3000/status
 ```

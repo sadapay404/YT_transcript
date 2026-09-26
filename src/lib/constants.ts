@@ -396,6 +396,31 @@ export const PLAYBACK = {
   copyFeedbackMs: 1400,
 } as const;
 
+/* ───────────────────────────── Follow along ─────────────────────────────── */
+
+export const FOLLOW = {
+  /**
+   * How long a programmatic scroll owns the rail (ms). Scroll events inside
+   * this window are ours, not the reader's.
+   */
+  settleMs: 760,
+  /**
+   * Grace after "Resume following" (ms) before another gesture counts as a
+   * takeover — a trackpad keeps firing momentum events for a moment.
+   */
+  resumeGraceMs: 700,
+  /** How far the rail may drift from where we parked it (px). */
+  driftTolerance: 24,
+  /**
+   * Extra passes after a long jump. `content-visibility: auto` lets the
+   * browser measure a never-painted line from its placeholder box, so a seek
+   * across an hour of video can land short; one or two corrections finish it.
+   */
+  maxCorrections: 2,
+  /** Gap between those passes (ms) — long enough to measure, short enough to read as one move. */
+  correctionMs: 140,
+} as const;
+
 /* ──────────────────────────── App defaults ──────────────────────────────── */
 
 export const DEFAULT_SETTINGS: AppSettings = {
