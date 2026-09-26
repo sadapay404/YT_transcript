@@ -3,7 +3,7 @@
 /**
  * Ambient background. Cost is theme-driven: the whole field is `opacity: 0`
  * for Pure OLED and Zen Paper (see `--aurora-opacity`), so those themes stay
- * perfectly flat while Aurora Glass gets its moving gradients and Cyberpunk
+ * perfectly flat while Liquid Glass gets its moving gradients and Cyberpunk
  * gets a faint neon grid.
  */
 export function AuroraBackdrop() {

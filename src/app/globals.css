@@ -50,15 +50,16 @@
   --ink: #edeaf5;
   --ink-soft: #a6a4b8;
   --ink-faint: #6c6a80;
-  --line: rgb(255 255 255 / 0.08);
-  --line-strong: rgb(255 255 255 / 0.17);
+  --line: rgb(255 255 255 / 0.14);
+  --line-strong: rgb(255 255 255 / 0.42);
   --accent: #8b93ff;
   --accent-2: #4dd4e8;
   --accent-soft: rgb(139 147 255 / 0.14);
   --accent-ink: #07070d;
   --glow: rgb(139 147 255 / 0.35);
   --blur: 0px;
-  --panel-shadow: 0 1px 0 0 rgb(255 255 255 / 0.04) inset;
+  --panel-shadow: 0 1px 0 0 rgb(255 255 255 / 0.06) inset,
+    0 18px 55px -44px rgb(139 147 255 / 0.45);
   --aurora-opacity: 0;
   --grid-opacity: 0;
   --danger: #ff6b6b;
@@ -91,13 +92,15 @@
   --success: #34d399;
 }
 
-/* ── Aurora Glass (frosted panels over moving gradients) ─────────────────── */
+/* ── Liquid Glass (frosted panels over moving gradients) ────────────────── */
 [data-theme="glass"] {
   --canvas: #070b1a;
   --canvas-2: #0a1026;
-  --surface: rgb(255 255 255 / 0.055);
-  --surface-2: rgb(255 255 255 / 0.09);
-  --elevated: rgb(255 255 255 / 0.13);
+  /* Frosted, not see-through: tinted enough that text stays readable over
+     the moving aurora and over video, with blur still showing the colour. */
+  --surface: rgb(22 28 60 / 0.64);
+  --surface-2: rgb(32 40 80 / 0.68);
+  --elevated: rgb(38 46 90 / 0.9);
   --ink: #f2f5ff;
   --ink-soft: #c2cbe8;
   --ink-faint: #8e99bb;
@@ -108,11 +111,12 @@
   --accent-soft: rgb(124 92 255 / 0.2);
   --accent-ink: #08061c;
   --glow: rgb(124 92 255 / 0.5);
-  --blur: 24px;
-  --panel-shadow: 0 1px 0 0 rgb(255 255 255 / 0.12) inset,
-    0 30px 80px -40px rgb(8 6 40 / 0.9);
+  --blur: 28px;
+  --panel-shadow: 0 1px 0 0 rgb(255 255 255 / 0.18) inset,
+    0 0 0 1px rgb(255 255 255 / 0.04),
+    0 30px 90px -36px rgb(8 6 40 / 0.92);
   --aurora-opacity: 1;
-  --grid-opacity: 0.18;
+  --grid-opacity: 0.22;
   --danger: #ff7a7a;
   --success: #5eead4;
 }
@@ -135,12 +139,142 @@
   --accent-ink: #fffdf7;
   --glow: rgb(176 86 44 / 0.25);
   --blur: 0px;
-  --panel-shadow: 0 1px 2px rgb(43 38 32 / 0.05),
-    0 12px 40px -30px rgb(43 38 32 / 0.4);
+  --panel-shadow: 0 1px 2px rgb(43 38 32 / 0.06),
+    0 12px 40px -26px rgb(43 38 32 / 0.42),
+    0 0 0 1px rgb(255 255 255 / 0.45) inset;
   --aurora-opacity: 0;
-  --grid-opacity: 0.1;
+  --grid-opacity: 0.08;
   --danger: #b3392f;
   --success: #3f7d63;
+}
+
+/* Each theme gets a small material cue in addition to its token palette. The
+   shared components stay the same, but the surfaces still feel intentionally
+   authored rather than merely recoloured. */
+[data-theme="oled"] .panel {
+  background-image: linear-gradient(135deg, rgb(255 255 255 / 0.035), transparent 42%);
+}
+
+/* White frames on true black — a faint hairline disappears entirely. Kept in
+   the components layer so state utilities (focus, invalid) still win. */
+@layer components {
+  [data-theme="oled"] .panel {
+    border-color: rgb(255 255 255 / 0.85);
+  }
+
+  [data-theme="oled"] .field,
+  [data-theme="oled"] .panel-solid {
+    border-color: rgb(255 255 255 / 0.7);
+  }
+}
+
+[data-theme="cyberpunk"] .panel {
+  background-image: linear-gradient(
+    135deg,
+    rgb(255 47 185 / 0.09),
+    transparent 36%,
+    rgb(34 211 238 / 0.045)
+  );
+}
+
+[data-theme="glass"] .panel {
+  background-image: linear-gradient(
+    135deg,
+    rgb(255 255 255 / 0.12),
+    transparent 38%,
+    rgb(124 92 255 / 0.08)
+  );
+  backdrop-filter: blur(var(--blur)) saturate(170%);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(170%);
+}
+
+/* ── Theme-aware TranStudio logo ────────────────────────────────────────────
+   One SVG, four treatments. Zen Paper keeps the original terracotta line art;
+   OLED is crisp white with an indigo pulse; Cyberpunk goes neon; Liquid Glass
+   is a luminous violet → cyan gradient. */
+:root,
+[data-theme="oled"] {
+  --logo-book: #ffffff;
+  --logo-wave-a: #8b93ff;
+  --logo-wave-b: #4dd4e8;
+  --logo-name: #ffffff;
+  --logo-by: #a6a4b8;
+  --logo-glow: drop-shadow(0 0 6px rgb(139 147 255 / 0.35));
+  --logo-name-font: var(--font-serif-stack);
+}
+
+[data-theme="cyberpunk"] {
+  --logo-book: #ff2fb9;
+  --logo-wave-a: #22d3ee;
+  --logo-wave-b: #a5f3fc;
+  --logo-name: #f6ecff;
+  --logo-by: #22d3ee;
+  --logo-glow: drop-shadow(0 0 5px rgb(255 47 185 / 0.75))
+    drop-shadow(0 0 12px rgb(34 211 238 / 0.35));
+  --logo-name-font: var(--font-sans-stack);
+}
+
+[data-theme="glass"] {
+  --logo-book: #e9e4ff;
+  --logo-wave-a: #a78bfa;
+  --logo-wave-b: #22d3ee;
+  --logo-name: #f2f5ff;
+  --logo-by: #c2cbe8;
+  --logo-glow: drop-shadow(0 0 8px rgb(124 92 255 / 0.55));
+  --logo-name-font: var(--font-sans-stack);
+}
+
+[data-theme="zen"] {
+  --logo-book: #b0562c;
+  --logo-wave-a: #b0562c;
+  --logo-wave-b: #c8764c;
+  --logo-name: #2b2620;
+  --logo-by: #5c5346;
+  --logo-glow: none;
+  --logo-name-font: var(--font-serif-stack);
+}
+
+.tran-logo-mark {
+  filter: var(--logo-glow);
+  transition: filter 400ms var(--ease-liquid);
+}
+.tran-logo-book {
+  stroke: var(--logo-book);
+  transition: stroke 400ms var(--ease-liquid);
+}
+.tran-logo-name {
+  color: var(--logo-name);
+  font-family: var(--logo-name-font);
+}
+[data-theme="glass"] .tran-logo-name {
+  background: linear-gradient(100deg, #ffffff, #c4b5fd 55%, #67e8f9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+[data-theme="cyberpunk"] .tran-logo-name {
+  text-shadow: 0 0 10px rgb(255 47 185 / 0.55);
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+.tran-logo-by {
+  color: var(--logo-by);
+}
+
+[data-theme="glass"] .aurora-blob {
+  filter: blur(96px) saturate(1.3);
+}
+
+[data-theme="zen"] .app-shell {
+  background-image: radial-gradient(
+    circle at 12% 0%,
+    rgb(176 86 44 / 0.055),
+    transparent 32rem
+  );
+}
+
+[data-theme="zen"] .panel {
+  background-image: linear-gradient(135deg, rgb(255 255 255 / 0.5), transparent 48%);
 }
 
 /* ──────────────────────── 4. Tailwind theme bridge ──────────────────────── */
@@ -360,6 +494,18 @@
     background: var(--surface-2);
     border: 1px solid var(--line);
     border-radius: var(--radius-panel);
+  }
+
+  /* Read mode is a reading block, not an endlessly growing page column. The
+     transcript rail owns the scroll, while the title/export row stays pinned. */
+  .read-mode-panel {
+    height: min(72dvh, 760px);
+    max-height: calc(100dvh - 8rem);
+  }
+
+  .read-mode-panel .overflow-y-auto {
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent) transparent;
   }
 
   .hairline {
@@ -800,4 +946,286 @@
 @utility drag-none {
   -webkit-user-drag: none;
   user-select: none;
+}
+
+/* ───────────────────────── 9. Cinema (theater) mode ────────────────────────
+   The page stops scrolling and the studio fills the space between the header
+   and the credits. `.cinema-stage` is a size container, so the player is sized
+   from the real space available — it can never be taller than the window, and
+   the footer can never sit on top of it. `--cinema-p` (0 → 1, written by
+   useCinemaShrink) moves the player between its theater size and its compact
+   size as the reader scrolls the transcript. */
+html[data-theater] {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html[data-theater] body {
+  overflow: hidden;
+}
+html[data-theater] .app-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+html[data-theater] [data-landing] {
+  display: none;
+}
+/* Every pixel goes to the video + transcript in theater: the reassurance
+   line under the URL bar is hidden (the paste link stays). */
+html[data-theater] [data-url-hint] {
+  display: none;
+}
+/* Unlayered on purpose: the title row carries Tailwind's `flex` utility,
+   which would out-rank a rule inside `@layer components`. */
+@container cinema (max-height: 32rem) {
+  [data-cinema-title] {
+    display: none;
+  }
+  [data-viral-clips-bar] {
+    padding-block: 0.3rem;
+  }
+  [data-viral-clips-bar] > button {
+    height: 2rem;
+  }
+}
+
+@layer components {
+  .cinema-stage {
+    container-type: size;
+    container-name: cinema;
+    --cinema-p: 0;
+    /* Transport + title bar under the video, and the gap to the transcript. */
+    --cinema-chrome: 8.75rem;
+    /* The transcript always keeps at least this much room at full size. */
+    /* (Header + the viral-clips bar take ~6.5rem of it, so the reading
+       area itself never collapses on short or phone-sized windows.) */
+    --cinema-peek: clamp(10.5rem, 30cqh, 16rem);
+  }
+
+  .cinema-player {
+    --cinema-max: max(
+      5.5rem,
+      min(45rem, calc(100cqh - var(--cinema-chrome) - var(--cinema-peek)))
+    );
+    --cinema-min: min(var(--cinema-max), max(7rem, 24cqh));
+    /* A plain lerp. (Chromium drops the `max - (max - min) * p` spelling as
+       invalid at exactly p = 1, which collapsed the player to 0px.) */
+    --cinema-h: calc(
+      var(--cinema-max) * (1 - var(--cinema-p)) + var(--cinema-min) * var(--cinema-p)
+    );
+    flex: none;
+    width: min(100%, calc(var(--cinema-h) * 16 / 9));
+    max-width: 100%;
+    transition: width 110ms linear;
+  }
+  /* Short windows (720p laptops, phones): drop the title row under the
+     video — scrolling the transcript still resizes it — and hand that room
+     to the video and the reading area instead. */
+  @container cinema (max-height: 32rem) {
+    .cinema-player {
+      --cinema-chrome: 5.75rem;
+      --cinema-peek: 10.5rem;
+    }
+  }
+  .cinema-stage[data-cinema-animate] .cinema-player {
+    transition: width 380ms var(--ease-liquid);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cinema-player,
+    .cinema-stage[data-cinema-animate] .cinema-player {
+      transition: none;
+    }
+  }
+}
+
+/* ─────────────────────────────── 10. NexAI ─────────────────────────────────
+   The assistant's own visual language: the familiar blue → violet → rose "AI"
+   gradient for the mark and the one primary action, layered over each theme's
+   own surfaces so it still belongs to Zen, OLED, Glass and Cyberpunk. */
+@layer components {
+  .nexai-header {
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, #9b6bff 7%, transparent),
+      transparent
+    );
+  }
+  .nexai-badge,
+  .nexai-avatar {
+    background:
+      radial-gradient(circle at 30% 20%, rgb(155 107 255 / 0.22), transparent 62%),
+      linear-gradient(135deg, rgb(76 141 255 / 0.13), rgb(255 111 163 / 0.13));
+    border: 1px solid color-mix(in oklab, #9b6bff 32%, var(--line));
+  }
+  .nexai-badge {
+    box-shadow: 0 8px 22px -12px rgb(155 107 255 / 0.7);
+  }
+  .nexai-mark--live {
+    animation: nexai-pulse 1.8s var(--ease-liquid) infinite;
+    transform-origin: 50% 50%;
+  }
+
+  .nexai-hero {
+    border: 1px solid color-mix(in oklab, #9b6bff 26%, var(--line));
+    background:
+      radial-gradient(120% 90% at 100% 0%, rgb(155 107 255 / 0.17), transparent 56%),
+      radial-gradient(90% 80% at 0% 100%, color-mix(in oklab, var(--accent) 15%, transparent), transparent 62%),
+      var(--surface);
+  }
+  .nexai-cta,
+  .nexai-cta-chip,
+  .viral-cta {
+    color: #fff;
+    background: linear-gradient(110deg, #3f7bff, #8b5cff 48%, #f0609b 100%);
+    background-size: 180% 100%;
+    background-position: 0% 50%;
+    transition:
+      background-position 500ms var(--ease-liquid),
+      transform 160ms var(--ease-liquid),
+      box-shadow 200ms var(--ease-liquid);
+  }
+  .nexai-cta {
+    box-shadow: 0 10px 26px -14px rgb(139 92 255 / 0.9);
+  }
+  .nexai-cta:hover:not(:disabled),
+  .nexai-cta-chip:hover:not(:disabled),
+  .viral-cta:hover:not(:disabled) {
+    background-position: 100% 50%;
+    box-shadow: 0 12px 30px -12px rgb(139 92 255 / 0.85);
+  }
+  .nexai-cta:active:not(:disabled),
+  .viral-cta:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+  .nexai-cta .nexai-mark path,
+  .viral-cta .nexai-mark path {
+    fill: #fff;
+  }
+  .nexai-cta .nexai-mark circle,
+  .viral-cta .nexai-mark circle {
+    display: none;
+  }
+
+  .nexai-tile:hover {
+    background: color-mix(in oklab, var(--accent) 6%, var(--surface));
+  }
+
+  .nexai-thinking,
+  .nexai-scan,
+  .nexai-clips-head {
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .nexai-scan {
+    background:
+      radial-gradient(100% 80% at 100% 0%, rgb(155 107 255 / 0.1), transparent 60%),
+      var(--surface);
+  }
+  .nexai-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #4c8dff, #ff6fa3);
+    animation: nexai-dot 1.1s ease-in-out infinite;
+  }
+  .nexai-dot:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .nexai-dot:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  .nexai-clip {
+    background: linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--clip-hex) 9%, var(--surface)),
+      var(--surface) 62%
+    );
+    transition:
+      border-color 200ms var(--ease-liquid),
+      box-shadow 200ms var(--ease-liquid),
+      transform 200ms var(--ease-liquid);
+  }
+  .nexai-clip:hover,
+  .nexai-clip.is-armed {
+    border-color: color-mix(in oklab, var(--clip-hex) 48%, var(--line));
+    box-shadow: 0 14px 34px -22px var(--clip-hex);
+  }
+  .nexai-clip[data-playing="true"] {
+    animation: clip-breathe 2.4s ease-in-out infinite;
+  }
+  .nexai-clip-edge {
+    background: var(--clip-hex);
+    opacity: 0.85;
+  }
+  .nexai-rank {
+    background: color-mix(in oklab, var(--clip-hex) 17%, transparent);
+    color: color-mix(in oklab, var(--clip-hex) 62%, var(--ink));
+    border: 1px solid color-mix(in oklab, var(--clip-hex) 30%, transparent);
+  }
+  .nexai-ring {
+    background: conic-gradient(
+      var(--ring-hex) var(--ring-value),
+      color-mix(in oklab, var(--ink) 10%, transparent) 0
+    );
+  }
+  .nexai-ring::before {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    border-radius: inherit;
+    background: var(--surface);
+  }
+  .nexai-hookline {
+    background: color-mix(in oklab, var(--clip-hex) 8%, transparent);
+    border-left: 2px solid var(--clip-hex);
+  }
+  .nexai-play {
+    background: color-mix(in oklab, var(--clip-hex) 16%, var(--surface));
+    border: 1px solid color-mix(in oklab, var(--clip-hex) 42%, var(--line));
+    color: var(--ink);
+  }
+  .nexai-play.is-armed {
+    background: var(--clip-hex);
+    border-color: var(--clip-hex);
+    color: #fff;
+  }
+
+  /* The transcript's own "find clips" bar. */
+  .viral-cta-bar {
+    background: linear-gradient(
+      180deg,
+      transparent,
+      color-mix(in oklab, #9b6bff 6%, transparent)
+    );
+  }
+}
+
+@keyframes nexai-pulse {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(45deg) scale(0.86);
+  }
+}
+@keyframes nexai-dot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nexai-mark--live,
+  .nexai-dot,
+  .nexai-clip[data-playing="true"] {
+    animation: none;
+  }
 }

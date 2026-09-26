@@ -115,12 +115,15 @@ export const usePlaybackStore = create<PlaybackStore>((set, get) => ({
   },
 
   playClip: (range) => {
-    const { controller } = get();
-    if (!controller) return;
+    // Arm the range before touching the player. Read mode unmounts the player,
+    // so onReady can adopt this pending loop after the layout switches back.
     set({ loopRange: range });
-    controller.setLoopRange(range);
-    controller.seekTo(range.start);
-    controller.play();
+    const { controller } = get();
+    if (controller) {
+      controller.setLoopRange(range);
+      controller.seekTo(range.start);
+      controller.play();
+    }
     get().updateTime(range.start);
   },
 
@@ -129,3 +132,30 @@ export const usePlaybackStore = create<PlaybackStore>((set, get) => ({
     get().controller?.setLoopRange(null);
   },
 }));
+
+/*
+ * A new transcript must never inherit the previous video's clock, active line
+ * or armed clip. Without this, the first ticks of a newly loaded video could be
+ * resolved against stale state and the rail would briefly point at the old
+ * material. Same-video refreshes keep their time and recompute the line.
+ */
+useTranscriptStore.subscribe((state, previous) => {
+  if (state.transcript === previous.transcript) return;
+
+  const segments = state.transcript?.segments;
+  const sameVideo =
+    Boolean(state.transcript && previous.transcript) &&
+    state.transcript?.videoId === previous.transcript?.videoId;
+
+  usePlaybackStore.getState().controller?.setLoopRange(null);
+  usePlaybackStore.setState((playback) => {
+    const currentTime = sameVideo ? playback.currentTime : 0;
+    return {
+      currentTime,
+      activeSegmentIndex:
+        sameVideo && segments ? findActiveSegmentIndex(segments, currentTime) : -1,
+      loopRange: null,
+      ...(sameVideo ? {} : { duration: 0 }),
+    };
+  });
+});

@@ -27,30 +27,39 @@ export const THEMES: ThemeDefinition[] = [
     id: "oled",
     label: "Pure OLED",
     tagline: "True black. Zero glare. Maximum focus.",
+    detail: "A quiet, pixel-saving reading room for late-night focus.",
     scheme: "dark",
     swatch: ["#000000", "#121218", "#8b93ff"],
+    ink: "#ffffff",
   },
   {
     id: "cyberpunk",
     label: "Cyberpunk",
     tagline: "Neon magenta + electric cyan on midnight chrome.",
+    detail: "A kinetic studio treatment for clips, cuts and bold ideas.",
     scheme: "dark",
     swatch: ["#06030d", "#ff2fb9", "#22d3ee"],
+    ink: "#ff5fcb",
   },
   {
     id: "glass",
-    label: "Aurora Glass",
+    label: "Liquid Glass (Definitly not inspired 😶)",
     tagline: "Frosted panels floating over living gradients.",
+    detail: "The richest treatment: animated aurora, deep blur and layered depth.",
+    warning: "May Lag on Your PC.",
     scheme: "dark",
     swatch: ["#070b1a", "#7c5cff", "#22d3ee"],
+    ink: "#e9e4ff",
     signature: true,
   },
   {
     id: "zen",
-    label: "Zen Paper",
+    label: "Zen Paper (Mubashir's Fav.)",
     tagline: "Warm ink on cream paper. Distraction-free reading.",
+    detail: "The default reading desk: tactile paper, calm contrast and warm ink.",
     scheme: "light",
     swatch: ["#f6f0e4", "#2f2a23", "#b0562c"],
+    ink: "#2f2a23",
   },
 ];
 
@@ -368,14 +377,14 @@ export const GEMINI = {
    * written for — but Google can retire a model for *new* accounts while it
    * keeps working for older ones, so nothing here assumes it will answer.
    */
-  defaultModel: "gemini-2.5-flash",
-  fallbackModel: "gemini-2.5-flash-lite",
+  defaultModel: "gemini-flash-latest",
+  fallbackModel: "gemini-flash-lite-latest",
   /**
-   * Tried in order when Google reports the preferred model as unavailable.
-   * Google's own error message usually names a replacement; that name is
-   * preferred over this list, which is only a backstop.
+   * Last-resort names, used only when ListModels discovery is unreachable.
+   * Normally the app asks Google which models this key can call and ranks
+   * those (see `lib/gemini/models.ts`), so nothing here has to stay current.
    */
-  modelFallbacks: ["gemini-3.8-flash", "gemini-flash-latest"],
+  modelFallbacks: ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
   /** Model auto-detected via ListModels is cached this long. */
   modelCacheTtlMs: 10 * 60 * 1000,
   temperature: { chat: 0.7, clips: 0.55, summary: 0.4 },
@@ -458,10 +467,6 @@ export const PREFERENCES_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 export const STORAGE_KEYS = {
   chat: "transtudio.chat.v1",
 } as const;
-
-/* ──────────────────────────── Input helpers ─────────────────────────────── */
-
-export const DEMO_URL = "https://www.youtube.com/watch?v=aircAruvnKk";
 
 export const SUGGESTED_PROMPTS = [
   "Summarize this video in 5 bullets.",

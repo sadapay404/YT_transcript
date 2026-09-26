@@ -4,12 +4,18 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "connector:pack": "node scripts/pack-connector.mjs",
+    "prebuild": "node scripts/pack-connector.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "desktop:prepare": "node scripts/prepare-electron.mjs",
+    "desktop:dev": "npm run build && npm run desktop:prepare && electron .",
+    "desktop:dir": "npm run build && npm run desktop:prepare && electron-builder --dir --publish never",
+    "desktop:build": "npm run build && npm run desktop:prepare && electron-builder --win --publish never"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -32,6 +38,8 @@
     "@types/node": "^22.20.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^37.10.3",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
     "tailwindcss": "^4",
@@ -41,5 +49,46 @@
   "description": "TranStudio \u2014 read any YouTube video: synchronized transcripts, readable exports, free-tier AI.",
   "engines": {
     "node": "22.x"
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.transtudio.desktop",
+    "productName": "TranStudio",
+    "artifactName": "TranStudio-Setup-${version}.${ext}",
+    "asar": true,
+    "asarUnpack": [
+      ".next/standalone/**"
+    ],
+    "files": [
+      "electron/**",
+      ".next/standalone/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TranStudio",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "electronFuses": {
+      "runAsNode": true
+    }
   }
 }

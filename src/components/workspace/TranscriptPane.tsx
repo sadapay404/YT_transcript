@@ -16,9 +16,11 @@ import { useCallback, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlignLeft, ChevronsDown } from "lucide-react";
 
-import type { TranscriptSegment } from "@/lib/types";
+import type { TranscriptSegment, ViralClip } from "@/lib/types";
 import { cn, formatDuration, readingMinutes } from "@/lib/utils";
 import { TranscriptLine } from "@/components/workspace/TranscriptLine";
+import { ExportMenu } from "@/components/export/ExportMenu";
+import { ViralClipsBar } from "@/components/workspace/ViralClipsBar";
 import { useFollowAlong } from "@/hooks/useFollowAlong";
 import { usePlaybackStore } from "@/stores/usePlaybackStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
@@ -33,8 +35,10 @@ const NO_SEGMENTS: TranscriptSegment[] = [];
 
 export function TranscriptPane({ className }: TranscriptPaneProps) {
   const transcript = useTranscriptStore((s) => s.transcript);
+  const clips = useTranscriptStore((s) => s.clips);
 
   const showTimestamps = useSettingsStore((s) => s.showTimestamps);
+  const showClipHighlights = useSettingsStore((s) => s.showClipHighlights);
   const autoScroll = useSettingsStore((s) => s.autoScroll);
   const centerActiveLine = useSettingsStore((s) => s.centerActiveLine);
   const reduceMotion = useSettingsStore((s) => s.reduceMotion);
@@ -48,10 +52,25 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
   const measure = useSettingsStore((s) => s.typography.measure);
 
   const activeIndex = usePlaybackStore((s) => s.activeSegmentIndex);
+  const loopRange = usePlaybackStore((s) => s.loopRange);
+  const playbackStatus = usePlaybackStore((s) => s.status);
   const seekTo = usePlaybackStore((s) => s.seekTo);
 
   const segments = transcript?.segments ?? NO_SEGMENTS;
   const forceHours = (transcript?.durationSeconds ?? 0) >= 3600;
+  const clipsBySegment = useMemo(() => {
+    const map = new Map<number, ViralClip[]>();
+    for (const clip of clips) {
+      for (const segmentId of clip.segmentIds) {
+        const current = map.get(segmentId) ?? [];
+        current.push(clip);
+        map.set(segmentId, current);
+      }
+    }
+    return map;
+  }, [clips]);
+
+  const transcriptKey = transcript ? `${transcript.videoId}@${transcript.fetchedAt}` : "empty";
 
   const { paused, resume, containerRef } = useFollowAlong({
     segments,
@@ -60,7 +79,7 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
     center: centerActiveLine,
     reduceMotion,
     // New material ⇒ following starts over, however the last read ended.
-    resetKey: transcript ? `${transcript.videoId}@${transcript.fetchedAt}` : "empty",
+    resetKey: transcriptKey,
     // A reflow moves the rail legitimately; don't read it as a takeover.
     reflowKey: `${viewMode}|${fontFamily}|${fontSize}|${lineHeight}|${letterSpacing}|${measure}`,
   });
@@ -86,11 +105,11 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
 
   return (
     <section
-      className={cn("flex min-h-0 flex-1 flex-col", className)}
+      className={cn("relative flex min-h-0 flex-1 flex-col overflow-visible", className)}
       aria-label="Transcript"
     >
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2">
+      <header className="relative z-30 flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2">
         <div className="flex items-center gap-2">
           <AlignLeft className="h-3.5 w-3.5 text-accent" />
           <h2 className="text-[12px] font-semibold tracking-wide text-ink-soft uppercase">
@@ -108,22 +127,29 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
           {transcript?.languageLabel && (
             <span className="chip !py-0 !text-[9px]">{transcript.languageLabel}</span>
           )}
+          {viewMode === "read" && (
+            <span className="chip chip-accent !py-0 !text-[9px]">scroll inside</span>
+          )}
         </div>
 
-        {stats && (
-          <p className="font-mono text-[11px] text-ink-faint tabular-nums">
-            {stats.lines} lines · {stats.words.toLocaleString()} words · {stats.duration} ·{" "}
-            {stats.reading} min read
-          </p>
-        )}
+        <div className="flex items-center gap-2">
+          {stats && (
+            <p className="hidden font-mono text-[11px] text-ink-faint tabular-nums sm:block">
+              {stats.lines} lines · {stats.words.toLocaleString()} words · {stats.duration} ·{" "}
+              {stats.reading} min read
+            </p>
+          )}
+          {transcript && <ExportMenu compact />}
+        </div>
       </header>
 
       {/* ── Lines ──────────────────────────────────────────────────────── */}
       {/* The wrapper is what pins "Resume following" over the rail; the rail
           itself is the element the follow engine measures and scrolls. */}
-      <div className="relative min-h-0 flex-1">
+      <div className="relative z-0 min-h-0 flex-1">
         <div
           ref={containerRef}
+          data-transcript-rail
           className="fade-y h-full overflow-y-auto overscroll-contain px-2 py-3 sm:px-3"
         >
           {segments.length === 0 ? (
@@ -131,10 +157,10 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
               No transcript loaded yet.
             </p>
           ) : (
-            <ol className="reading-type mx-auto flex flex-col gap-[0.35em]">
+            <ol key={transcriptKey} className="reading-type mx-auto flex flex-col gap-[0.35em]">
               {segments.map((segment, index) => (
                 <TranscriptLine
-                  key={segment.id}
+                  key={`${transcriptKey}:${segment.id}`}
                   segment={segment}
                   index={index}
                   active={index === activeIndex}
@@ -142,6 +168,9 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
                   forceHours={forceHours}
                   reduceMotion={reduceMotion}
                   onSeek={handleSeek}
+                  clips={showClipHighlights ? clipsBySegment.get(segment.id) ?? [] : []}
+                  clipArmed={Boolean(showClipHighlights && clipsBySegment.get(segment.id)?.some((clip) => clip.id === loopRange?.clipId))}
+                  clipPlaying={Boolean(showClipHighlights && (playbackStatus === "playing" || playbackStatus === "buffering") && clipsBySegment.get(segment.id)?.some((clip) => clip.id === loopRange?.clipId))}
                 />
               ))}
             </ol>
@@ -174,6 +203,9 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* ── NexAI's main job, one click away ─────────────────────────────── */}
+      {segments.length > 0 && <ViralClipsBar />}
     </section>
   );
 }

@@ -387,6 +387,35 @@ describe("Step 3 — the transcript follows playback", () => {
   });
 });
 
+describe("Loading a second video", () => {
+  it("replaces every line's text instead of mixing the two transcripts", async () => {
+    const second = makeTranscript();
+    second.videoId = "verify00002";
+    second.fetchedAt = "2026-09-26T01:00:00.000Z";
+    second.segments = second.segments.map((segment) => ({
+      ...segment,
+      text: `Second video line ${segment.id}`,
+    }));
+
+    await act(async () => {
+      useTranscriptStore.setState({ transcript: second });
+    });
+    await flush();
+    // Playing moves the active line; before the fix, only re-rendered lines
+    // picked up the new text and the rest kept the first video's words.
+    await act(async () => {
+      usePlaybackStore.setState({ activeSegmentIndex: 5 });
+    });
+    await flush();
+
+    const texts = [...host.querySelectorAll("[data-segment-index]")].map(
+      (line) => line.textContent ?? "",
+    );
+    expect(texts).toHaveLength(LINE_COUNT);
+    texts.forEach((text, index) => expect(text).toContain(`Second video line ${index}`));
+  });
+});
+
 describe("Step 3 — invariants the owner asked for", () => {
   it("keeps Zen Paper as the default theme and TranStudio as the name", async () => {
     const settings = useSettingsStore.getState();

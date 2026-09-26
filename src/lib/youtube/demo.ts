@@ -76,6 +76,7 @@ export function buildDemoTranscript(): TranscriptPayload {
 
   return {
     videoId: DEMO_VIDEO_ID,
+    title: DEMO_TITLE,
     url: "",
     language: "en",
     languageLabel: "English (demo)",
