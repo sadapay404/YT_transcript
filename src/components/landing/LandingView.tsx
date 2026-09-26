@@ -62,7 +62,7 @@ export function LandingView() {
         <div className="panel p-4">
           <SectionHeading
             eyebrow="Typography studio"
-            title="Built for long reads"
+            title="Only For Nerds Out There"
             body="Size, leading, tracking and line length — plus an OpenDyslexic option for readers who need it."
           />
           <div className="mt-4">
@@ -73,7 +73,7 @@ export function LandingView() {
         <div className="panel p-4">
           <SectionHeading
             eyebrow="Themes"
-            title="Choose your reading room"
+            title="Only For True Design Savy"
             body="Four complete treatments for the same TranStudio workflow. Zen Paper is the calm default; Liquid Glass brings the most motion and depth."
           />
           <div className="mt-4">
