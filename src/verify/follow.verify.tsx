@@ -1,10 +1,15 @@
 /**
- * TEMPORARY verification harness — not part of the shipped suite.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *  Step 3, end to end — opt-in (see vitest.verify.config.ts)
+ * ─────────────────────────────────────────────────────────────────────────────
+ *  The unit suite next to `sync.ts` and `follow.ts` proves the maths; this file
+ *  proves the *wiring*: the real `TranscriptPane` and `useFollowAlong`, rendered
+ *  and driven.
  *
- * jsdom has no layout engine and no scrolling, so this file teaches it just
- * enough: a synthetic 60-line rail where every line is 40px tall inside a 600px
- * viewport, with `scrollTo` recorded instead of animated. It then drives the
- * real `TranscriptPane` + `useFollowAlong` through the Step 3 behaviours.
+ *  jsdom has no layout engine and no scrolling, so it is taught just enough: a
+ *  synthetic 60-line rail, every line 40px tall inside a 600px viewport, with
+ *  `scrollTo`/`scrollIntoView` recorded instead of animated. Only the geometry
+ *  is faked — the assertions are about what the components actually do with it.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act } from "react";
