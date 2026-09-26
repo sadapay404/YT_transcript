@@ -39,10 +39,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build the standalone Next server and NSIS installer
-        run: npm run desktop:build
+      - name: Build the standalone Next server
+        run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Prepare the standalone Electron payload
+        run: npm run desktop:prepare
+
+      - name: Build the unsigned NSIS installer
+        run: npx electron-builder --win --publish never
 
       - name: Upload the unsigned installer
         uses: actions/upload-artifact@v5
