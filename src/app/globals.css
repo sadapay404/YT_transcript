@@ -493,6 +493,9 @@
 
   .transcript-line {
     position: relative;
+    /* The line is its own stacking context, so the moving wash's `z-index: -1`
+       resolves here: above the line's own tint, below its words. */
+    isolation: isolate;
     border-radius: 0.7rem;
     padding: 0.35rem 0.75rem;
     cursor: pointer;
@@ -510,18 +513,23 @@
     color: color-mix(in oklab, var(--ink) 72%, transparent);
   }
 
-  /* The liquid active-line glow (Framer Motion supplies the movement). */
+  /* The liquid active-line wash. There is exactly ONE of these in the rail at
+     any moment: Framer Motion's shared `layoutId` moves the element between
+     lines, so the highlight *travels* from sentence to sentence rather than
+     cross-fading. It reads as a wash behind the words (z-index -1 resolves
+     inside `.transcript-line`'s isolation) and is built from an inset ring plus
+     a gradient, so it stays crisp inside the rail's paint containment. */
   .active-wash {
     position: absolute;
-    inset: -1px -4px;
-    border-radius: 0.85rem;
+    inset: 0;
+    border-radius: 0.7rem;
     background: linear-gradient(
       100deg,
-      color-mix(in oklab, var(--accent) 20%, transparent),
-      color-mix(in oklab, var(--accent-2) 12%, transparent) 60%,
-      transparent
+      color-mix(in oklab, var(--accent) 26%, transparent),
+      color-mix(in oklab, var(--accent-2) 15%, transparent) 58%,
+      color-mix(in oklab, var(--accent) 6%, transparent)
     );
-    box-shadow: 0 10px 40px -20px var(--glow);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 24%, transparent);
     z-index: -1;
     pointer-events: none;
   }

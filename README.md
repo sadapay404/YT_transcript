@@ -114,8 +114,11 @@ src/
 │     ├─ metadata.ts      # title/author/duration/caption tracks (InnerTube → oEmbed)
 │     ├─ normalize.ts     # ms-vs-seconds handling, self-healing detection (tested)
 │     ├─ sync.ts          # playhead ↔ line maths: active line, scroll targets (tested)
+│     ├─ follow.ts        # is the reader still letting us scroll? gestures vs drift (tested)
 │     ├─ demo.ts          # bundled demo transcript (never a dead end)
 │     └─ probe.ts         # caption fetch probe + error classification
+├─ hooks/
+│  └─ useFollowAlong.ts   # ⭐ Step 3: auto-scroll follow, takeover detection, resume
 ├─ providers/ThemeProvider.tsx   # settings → <html> data-attributes + CSS variables
 ├─ stores/
 │  ├─ useSettingsStore.ts # theme / typography / layout (cookie-backed)
@@ -185,6 +188,44 @@ Themes: **Pure OLED** (`#000000`, default) · **Cyberpunk** (neon magenta/cyan) 
 
 `--transcript-font`, `-size`, `-leading`, `-tracking`, `-measure` are set on `<html>` from the settings store, so the transcript restyles as a pure CSS operation. Faces: Inter, Source Serif 4, **OpenDyslexic** (each with its own recommended leading/tracking).
 
+### The transcript follows the voice
+
+While **Follow along** is on, the spoken line is kept in view. Every jump is
+computed by `sync.nextScrollTop` — no component does arithmetic of its own:
+
+- **Centered** when *Center the active line* is on, kept in a comfortable band
+  (24px clear of the sticky chrome) when it is off.
+- **Instantly** when *Reduce motion* is on — the app never animates against the
+  reader's stated preference. Otherwise it glides.
+- **In Read mode, and on phones**, the rail isn't a scroller at all: the
+  transcript flows with the page, so following hands the centring to
+  `scrollIntoView` instead of pretending to own a scrollbar.
+- **A long seek is checked, not trusted.** `content-visibility: auto` lets the
+  browser skip off-screen lines, so a line that has never been painted can
+  measure from its placeholder box; after the rail settles the engine looks
+  again and finishes the move (capped at two extra passes).
+
+The highlight is **one element**, shared between lines with Framer Motion's
+`layoutId`, so it *travels* from sentence to sentence instead of cross-fading —
+the CSS has always called it `.active-wash`, and the line is its own stacking
+context so the wash sits behind the words but above the line's tint.
+
+**Reading beats following.** The moment a reader scrolls — a wheel, a finger,
+a scroll key, or a dragged scrollbar that drifts more than 24px from where the
+engine parked the rail — following pauses and **Resume following** appears over
+the rail. Clicking it, or any line, hands the rail back to the video. A new
+transcript (or switching the setting back on) starts following again.
+
+`.active-wash`, `data-segment-index`, the pause/resume cycle and the resume
+button's return trip are exercised against a real `TranscriptPane` in
+[`src/verify/follow.verify.tsx`](src/verify/follow.verify.tsx) — an opt-in
+suite, like the caption integration one:
+
+```bash
+npm i --no-save jsdom          # not a dependency of the app
+npx vitest run --config vitest.verify.config.ts
+```
+
 ---
 
 ## Build plan
@@ -193,7 +234,7 @@ Themes: **Pure OLED** (`#000000`, default) · **Cyberpunk** (neon magenta/cyan) 
 | ---- | ----- | ------ |
 | **1** | Scaffolding, type contracts, design system, 4 themes, typography studio, motion primitives | ✅ shipped |
 | **2** | `youtube-transcript` server action + IFrame player + transcript render (click-to-seek) | ✅ shipped |
-| **3** | Sync engine: auto-scroll follow, kinetic liquid active line | ⏳ |
+| **3** | Sync engine: auto-scroll follow, kinetic liquid active line | ✅ shipped |
 | **4** | Gemini chat sidebar (streaming, transcript context injected silently) | ⏳ |
 | **5** | Viral Clipper: structured JSON clips → colour-coded transcript bands with copy/loop-play | ⏳ |
 
