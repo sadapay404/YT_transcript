@@ -4,6 +4,7 @@ import {
   classifyGeminiError,
   extractRecommendedModel,
   getGeminiModel,
+  modelCandidates,
   resetDiscoveredGeminiModel,
   runWithModelFallback,
 } from "@/lib/gemini/client";
@@ -60,6 +61,7 @@ describe("runWithModelFallback", () => {
     expect(switched.model).toBe("gemini-3.8-flash");
     expect(calls).toEqual(["gemini-2.5-flash", "gemini-3.8-flash"]);
     expect(getGeminiModel()).toBe("gemini-3.8-flash");
+    expect(modelCandidates()[0]).toBe("gemini-3.8-flash");
 
     resetDiscoveredGeminiModel();
     const quota = await runWithModelFallback(

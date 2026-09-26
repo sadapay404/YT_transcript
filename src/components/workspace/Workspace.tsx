@@ -18,6 +18,7 @@ import { PasteTranscriptDialog } from "@/components/workspace/PasteTranscriptDia
 import { UrlBar } from "@/components/workspace/UrlBar";
 import { TranscriptPane } from "@/components/workspace/TranscriptPane";
 import { VideoPane } from "@/components/workspace/VideoPane";
+import { AssistantPanel } from "@/components/assistant/AssistantPanel";
 import { usePlaybackStore } from "@/stores/usePlaybackStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useTranscriptStore } from "@/stores/useTranscriptStore";
@@ -120,6 +121,8 @@ export function Workspace() {
       </AnimatePresence>
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
+      <div className="min-w-0 flex-1">
       <AnimatePresence mode="wait" initial={false}>
         {status === "loading" && !hasTranscript ? (
           <LoadingState key="loading" />
@@ -202,6 +205,9 @@ export function Workspace() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
+      <AssistantPanel />
+      </div>
 
       {/* ── Shortcut hint ───────────────────────────────────────────────── */}
       {hasTranscript && (

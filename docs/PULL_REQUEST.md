@@ -5,8 +5,8 @@ AI clipping and export studio (Next.js 16 + Gemini).
 
 > Every commit on this branch gets its own free Vercel preview URL, so the app is
 > usable live before merging. Merge when you're happy — `main` becomes production.
-> (See *Deployment prerequisites* below — this repo's `main` is still the empty
-> initial commit, so merging is also what makes a normal Vercel deploy work.)
+> This branch contains the complete five-step studio; the pull request is kept
+> deliberately unmerged until the owner asks.
 
 ## Shipped
 
@@ -25,8 +25,9 @@ AI clipping and export studio (Next.js 16 + Gemini).
 - `/status` dashboard and `GET /api/health` (shallow + `?deep=1`) that probe the
   runtime which actually serves traffic: Gemini key, live caption scrape, live
   Gemini call, plus a deterministic normaliser self-test.
-- 38 network-free unit tests and GitHub Actions CI (typecheck → lint → test →
-  build) with an empty environment.
+- Network-free unit coverage for the caption, sync, Gemini, clip, prompt and
+  export logic, plus GitHub Actions CI (typecheck → lint → test → build) with
+  an empty environment.
 
 ### Step 2 — the core engine (fetcher + player + transcript)
 - `extractTranscriptAction` server action → `fetchTranscriptForUrl()` pipeline:
@@ -44,8 +45,8 @@ AI clipping and export studio (Next.js 16 + Gemini).
   (`Space`, `J`/`L`, `1`/`2`/`3`), loading skeletons and a diagnostic error state.
 - Bundled **demo transcript** so the app is never a dead end: served when the
   host cannot reach YouTube (sandboxes/CI), always labelled as a demo.
-- 76 unit tests total, including hermetic fetch-pipeline tests that mock the
-  network so they pass in every environment.
+- The unit suite includes hermetic fetch-pipeline tests that mock the network
+  so they pass in every environment.
 
 ### Cleanup + rebrand to TranStudio
 - Renamed the app to **TranStudio** (package, metadata, PWA manifest, docs).
@@ -182,20 +183,30 @@ only:
 
 ```bash
 npm i --no-save jsdom                # test-only, not an app dependency
-npx vitest run --config vitest.verify.config.ts   # 16 passed
+npx vitest run --config vitest.verify.config.ts   # 41 passed (Step 3 + Steps 4–5)
 ```
 
 No dependency, no API key, no sign-up was added; Zen Paper is still the default
 theme, the name is still TranStudio and the slogan is still
 **Read it. Clip it. Ship it.**
 
-## Next
+### Step 4 — the assistant answers
 
-- **Step 4** — Gemini chat sidebar with the transcript injected as context.
-- **Step 5** — viral clipper: structured JSON clips → colour-coded transcript bands with copy/loop-play, plus the export menu.
+- `POST /api/chat` streams newline-delimited `delta`, `meta`, `clips`, `error` and one final `done` event. The client buffers partial network frames.
+- Chat, summary, chapters and clip modes use the right transcript shape: flat text for reading, compact timed records for timestamp work. Requests are capped server-side (message, history, segments and context).
+- Missing keys, quota, safety, network and unavailable-model failures are translated into a remedy instead of a stack trace. Model rotation happens only for an unavailable model, and a streaming answer never restarts after text has been emitted.
+- The assistant panel is resizable from 340–760px, keyboard accessible, and its width is persisted with the existing preferences cookie. The question is captured before it is appended, so a new turn is never sent twice.
 
-> This PR is Step 3 only. It is **not** merged yet — merge it when the preview
-> looks right.
+### Step 5 — the clips play and ship
+
+- Gemini clip responses are strict JSON, then parsed defensively (fences, prose and balanced braces) into safe model output.
+- `mapClipPlan` verifies every range against the real caption rail: repairs believable millisecond timestamps, clamps and snaps to complete lines, assigns plan-order colours, sorts by start, and drops a range it cannot locate.
+- Verified clips paint colour bands on the transcript with floating Copy and loop Play actions. Play arms the range before driving the player, so Read mode switches back to Split and a not-yet-ready player still adopts the loop.
+- The export menu has live previews and downloads for TXT, Markdown, SRT, VTT, JSON and CSV, with honest timestamp/header/paragraph toggles.
+
+The complete five-step build is **not** merged yet — merge it only when the owner
+explicitly asks. Production confirmation remains a deployment/browser check,
+not a claim made from the sandbox.
 
 ## Deployment prerequisites (Vercel)
 
@@ -212,11 +223,9 @@ Two fixes, both included/applied from here:
 1. **`vercel.json` pins `"framework": "nextjs"`** — overrides the saved project
    setting, so the Next.js builder always runs regardless of import order.
    (`installCommand: npm ci`, `buildCommand: npm run build`, `engines.node: 22.x`.)
-2. **Merging this PR puts the app on `main`.** This branch is a fast-forward
-   from `main`, so the merge is clean and conflict-free — after which the
-   default production flow builds real code instead of an empty README.
-   Alternative: set **Settings → Git → Production Branch** to
-   `arena/01a0d624-yt-transcript` and skip the merge entirely.
+2. **Merging this PR puts the app on `main`.** Keep the PR open while reviewing;
+   only the owner should merge it. The branch is based on the current production
+   history, so the normal Vercel flow builds the Next.js app after approval.
 
 Full diagnosis and the dashboard click-path live in
 [`docs/DEPLOY.md`](../docs/DEPLOY.md#troubleshooting).
@@ -224,10 +233,14 @@ Full diagnosis and the dashboard click-path live in
 ## Verification
 
 ```bash
-npm run test       # 169 unit tests (+3 live integration tests, opt-in)
-npm run lint       # zero warnings
-npm run typecheck  # next typegen + tsc --noEmit
-npm run build && npm start
+npm ci
+npm i --no-save jsdom
+npm run typecheck
+npx eslint .
+npx vitest run
+npx vitest run --config vitest.verify.config.ts
+npx next build
+npx next start -p 3000 -H 0.0.0.0
 # then open http://localhost:3000/status
 ```
 

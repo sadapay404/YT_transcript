@@ -18,7 +18,8 @@ import { memo } from "react";
 import { motion } from "framer-motion";
 
 import { cn, formatTimestamp } from "@/lib/utils";
-import type { TranscriptSegment } from "@/lib/types";
+import type { TranscriptSegment, ViralClip } from "@/lib/types";
+import { ClipActions } from "@/components/workspace/ClipActions";
 
 /**
  * One id for one moving highlight: when the spoken line changes, the old
@@ -46,6 +47,11 @@ interface TranscriptLineProps {
   reduceMotion: boolean;
   /** Called with the line's start time; the pane resumes following as well. */
   onSeek: (start: number) => void;
+  /** Verified clip bands that cover this caption line. */
+  clips: ViralClip[];
+  /** Selection and actual playback are separate states. */
+  clipArmed: boolean;
+  clipPlaying: boolean;
 }
 
 function TranscriptLineComponent({
@@ -56,16 +62,24 @@ function TranscriptLineComponent({
   forceHours,
   reduceMotion,
   onSeek,
+  clips,
+  clipArmed,
+  clipPlaying,
 }: TranscriptLineProps) {
+  const actionClips = clips.filter((clip) => clip.segmentStartIndex === index);
   return (
     <motion.li
       id={`seg-${index}`}
       data-segment-index={index}
       data-segment-id={segment.id}
       data-active={active}
+      data-clip-id={clips[0]?.id}
+      data-armed={clipArmed ? "true" : "false"}
+      data-playing={clipPlaying ? "true" : "false"}
       initial={false}
       animate={{ opacity: 1 }}
-      className="cv-auto list-none"
+      className={cn("group cv-auto list-none", clips.length > 0 && "clip-band")}
+      style={clips[0] ? { "--clip-hex": clips[0].color.hex, "--clip-glow": clips[0].color.glow } as React.CSSProperties : undefined}
     >
       <button
         type="button"
@@ -109,6 +123,11 @@ function TranscriptLineComponent({
           )}
         />
       </button>
+      {actionClips.length > 0 && (
+        <span className="absolute top-1/2 right-2 z-10 flex -translate-y-1/2 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {actionClips.map((clip) => <ClipActions key={clip.id} clip={clip} compact />)}
+        </span>
+      )}
     </motion.li>
   );
 }
@@ -125,5 +144,9 @@ export const TranscriptLine = memo(
     prev.index === next.index &&
     prev.showTimestamp === next.showTimestamp &&
     prev.forceHours === next.forceHours &&
-    prev.reduceMotion === next.reduceMotion,
+    prev.reduceMotion === next.reduceMotion &&
+    prev.clips.length === next.clips.length &&
+    prev.clips.every((clip, index) => clip.id === next.clips[index]?.id) &&
+    prev.clipArmed === next.clipArmed &&
+    prev.clipPlaying === next.clipPlaying,
 );

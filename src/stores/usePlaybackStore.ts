@@ -115,12 +115,15 @@ export const usePlaybackStore = create<PlaybackStore>((set, get) => ({
   },
 
   playClip: (range) => {
-    const { controller } = get();
-    if (!controller) return;
+    // Arm the range before touching the player. Read mode unmounts the player,
+    // so onReady can adopt this pending loop after the layout switches back.
     set({ loopRange: range });
-    controller.setLoopRange(range);
-    controller.seekTo(range.start);
-    controller.play();
+    const { controller } = get();
+    if (controller) {
+      controller.setLoopRange(range);
+      controller.seekTo(range.start);
+      controller.play();
+    }
     get().updateTime(range.start);
   },
 

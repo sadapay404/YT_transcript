@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Activity, AudioLines, Download, PanelRight, Settings2 } from "lucide-react";
+import { Activity, AudioLines, PanelRight, Settings2 } from "lucide-react";
 
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { StylePanel } from "@/components/layout/StylePanel";
 import { ThemeSwitcher } from "@/components/layout/ThemeSwitcher";
 import { ViewModeSwitch } from "@/components/layout/ViewModeSwitch";
+import { ExportMenu } from "@/components/export/ExportMenu";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 
 /**
@@ -17,7 +18,6 @@ import { useSettingsStore } from "@/stores/useSettingsStore";
 export function StudioHeader() {
   const sidebarOpen = useSettingsStore((s) => s.sidebarOpen);
   const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
-  const exportReady = false; // Step 5 wires the export menu in.
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-canvas/72 backdrop-blur-xl backdrop-saturate-150">
@@ -53,15 +53,9 @@ export function StudioHeader() {
 
         {/* ── Actions ───────────────────────────────────────────────────── */}
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            disabled={!exportReady}
-            title="Export transcript (Step 5)"
-            className="btn hidden h-9 gap-2 border border-line px-2.5 sm:flex"
-          >
-            <Download className="h-3.5 w-3.5" />
-            <span className="text-[12.5px]">Export</span>
-          </button>
+          <div className="hidden sm:block">
+            <ExportMenu />
+          </div>
 
           <ThemeSwitcher />
           <StylePanel />

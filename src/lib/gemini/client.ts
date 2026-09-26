@@ -39,15 +39,36 @@ export function getConfiguredGeminiModel(): string {
  * and every later call starts from it.
  */
 let discoveredModel: string | null = null;
+/** A model stays in the candidate list, but moves behind the working model after a refusal. */
+const refusedModels = new Set<string>();
+
+/** Remember a model that completed a request, including streaming requests. */
+export function rememberGeminiModel(model: string): void {
+  const normalized = model.trim();
+  if (!normalized) return;
+  discoveredModel = normalized;
+  refusedModels.delete(normalized);
+}
+
+/** Record only a model-level refusal; quota and transport failures never call this. */
+export function markGeminiModelUnavailable(model: string): void {
+  const normalized = model.trim();
+  if (normalized) refusedModels.add(normalized);
+}
 
 /**
- * Resolved model id, in precedence order: an explicit GEMINI_MODEL always wins
- * (so an operator can pin one), then whatever answered last, then the default.
- * `getConfiguredGeminiModel()` cannot be used here — it always returns a value,
- * which would make the discovered model unreachable.
+ * Resolved model id. An explicit GEMINI_MODEL leads until this process observes
+ * a model-level refusal; after that the best-known-good model gets the first
+ * attempt while the explicit pin remains as a later fallback. That makes an
+ * operator's pin recoverable without burning a 404 on every request.
  */
 export function getGeminiModel(): string {
-  return process.env.GEMINI_MODEL?.trim() || discoveredModel || GEMINI.defaultModel;
+  const configured = process.env.GEMINI_MODEL?.trim();
+  if (configured && !refusedModels.has(configured)) return configured;
+  if (discoveredModel && !refusedModels.has(discoveredModel)) return discoveredModel;
+  return process.env.GEMINI_MODEL?.trim()
+    ? GEMINI.modelFallbacks.find((model) => !refusedModels.has(model)) || GEMINI.defaultModel
+    : GEMINI.defaultModel;
 }
 
 /** What the last successful call used, if the fallback logic has run. */
@@ -58,6 +79,7 @@ export function getDiscoveredGeminiModel(): string | null {
 /** Test seam: forget a runtime discovery. */
 export function resetDiscoveredGeminiModel(): void {
   discoveredModel = null;
+  refusedModels.clear();
 }
 
 export function getGeminiFallbackModel(): string {
@@ -84,16 +106,33 @@ export function extractRecommendedModel(message: string): string | null {
 }
 
 /**
- * The models to try, in order: the configured one first (the project targets
- * it deliberately), then the declared fallbacks, then the lite model.
+ * Candidate order is discovery-aware. A fresh process starts with the explicit
+ * preference; once a model has answered, later calls start there. A refused
+ * explicit pin is deliberately retained later in the list rather than erased,
+ * so changing the account or model availability can recover without a restart.
  */
 export function modelCandidates(): string[] {
-  const candidates = [
-    getConfiguredGeminiModel(),
-    ...GEMINI.modelFallbacks,
-    getGeminiFallbackModel(),
-  ];
-  return [...new Set(candidates.filter(Boolean))];
+  const explicit = process.env.GEMINI_MODEL?.trim() || null;
+  const configured = getConfiguredGeminiModel();
+  const staticCandidates = [configured, ...GEMINI.modelFallbacks, getGeminiFallbackModel()];
+  const first = explicit && !refusedModels.has(explicit)
+    ? explicit
+    : !explicit && discoveredModel && !refusedModels.has(discoveredModel)
+      ? discoveredModel
+      : explicit && refusedModels.has(explicit) && discoveredModel && !refusedModels.has(discoveredModel)
+        ? discoveredModel
+        : configured && !refusedModels.has(configured)
+          ? configured
+          : GEMINI.modelFallbacks.find((model) => !refusedModels.has(model)) || getGeminiFallbackModel();
+
+  return [...new Set([first, ...staticCandidates].filter(Boolean))];
+}
+
+/** Put Google's suggested replacement at the front of a pending model queue. */
+export function queueSuggestion(queue: string[], suggestion: string | null | undefined): void {
+  const model = suggestion?.trim();
+  if (!model || queue.includes(model)) return;
+  queue.unshift(model);
 }
 
 /**
@@ -260,7 +299,7 @@ export async function runWithModelFallback<T>(
     const model = queue.shift() as string;
     try {
       const value = await call(model);
-      discoveredModel = model;
+      rememberGeminiModel(model);
       attempts.push({ model, ok: true });
       return { ok: true, value, model, attempts };
     } catch (error) {
@@ -275,11 +314,12 @@ export async function runWithModelFallback<T>(
         return { ok: false, failure, model, attempts };
       }
 
+      markGeminiModelUnavailable(model);
       // Believe Google's suggestion before our own list, and never retry a
       // name we have already burned.
       const tried = new Set(attempts.map((attempt) => attempt.model));
       if (recommended && !tried.has(recommended) && !queue.includes(recommended)) {
-        queue.unshift(recommended);
+        queueSuggestion(queue, recommended);
       }
     }
   }

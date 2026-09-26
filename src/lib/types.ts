@@ -42,6 +42,8 @@ export type TranscriptSource =
 /** Everything the app needs to render + export + feed Gemini. */
 export interface TranscriptPayload {
   videoId: string;
+  /** Best-effort display title; absent for caption-only API callers. */
+  title?: string;
   url: string;
   /** BCP-47-ish code YouTube reported, e.g. "en", "auto". */
   language: string;

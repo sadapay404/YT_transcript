@@ -13,6 +13,7 @@ import type {
   TranscriptErrorCode,
   TranscriptPayload,
   VideoMetadata,
+  ViralClip,
 } from "@/lib/types";
 import { extractTranscriptAction, loadDemoTranscriptAction } from "@/app/actions/transcript";
 import { describePasteFormat, parsePastedTranscript } from "@/lib/transcript/paste";
@@ -33,6 +34,8 @@ interface TranscriptState {
   input: string;
   transcript: TranscriptPayload | null;
   metadata: VideoMetadata | null;
+  /** Verified clip ranges produced for the current transcript. */
+  clips: ViralClip[];
   error: TranscriptError | null;
   /** Set when the server had to substitute the demo transcript. */
   notice: string | null;
@@ -46,6 +49,8 @@ interface TranscriptState {
 
   /** Mirrors the URL field so a retry (or deep link) can prefill it. */
   setInput: (input: string) => void;
+  setClips: (clips: ViralClip[]) => void;
+  clearClips: () => void;
   openPaste: () => void;
   closePaste: () => void;
   /** Turn pasted text (YouTube panel, .srt/.vtt, notes) into the active transcript. */
@@ -63,6 +68,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
   input: "",
   transcript: null,
   metadata: null,
+  clips: [],
   error: null,
   notice: null,
   diagnostics: [],
@@ -70,6 +76,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
   pasteOpen: false,
 
   setInput: (input) => set({ input }),
+
+  setClips: (clips) => set({ clips }),
+  clearClips: () => set({ clips: [] }),
 
   openPaste: () => set({ pasteOpen: true }),
   closePaste: () => set({ pasteOpen: false }),
@@ -82,6 +91,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       set({
         status: "success",
         error: null,
+        clips: [],
         lastFetchedAt: Date.now(),
         diagnostics: [],
         // Warnings travel the same channel as fetch notices, so the existing
@@ -97,6 +107,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         },
         transcript: {
           videoId: "pasted",
+          title: label?.trim() || `Pasted transcript (${describePasteFormat(parsed.format)})`,
           url: "",
           language: "und",
           languageLabel: describePasteFormat(parsed.format),
@@ -166,6 +177,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     set((state) => ({
       status: "success",
       error: null,
+      clips: [],
       diagnostics: result.attempts,
       notice: "Captions came from your own connection — this server's IP is blocked by YouTube, but yours is not.",
       lastFetchedAt: Date.now(),
@@ -249,6 +261,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       input: "",
       transcript: null,
       metadata: null,
+      clips: [],
       error: null,
       notice: null,
       diagnostics: [],
@@ -263,8 +276,12 @@ function applyResult(result: FetchTranscriptResult, set: Setter) {
   if (result.ok) {
     set({
       status: "success",
-      transcript: result.transcript,
+      transcript: {
+        ...result.transcript,
+        ...(result.metadata.title ? { title: result.metadata.title } : {}),
+      },
       metadata: result.metadata,
+      clips: [],
       error: null,
       notice: result.notice ?? null,
       diagnostics: result.diagnostics ?? [],
@@ -277,6 +294,7 @@ function applyResult(result: FetchTranscriptResult, set: Setter) {
     status: "error",
     transcript: null,
     metadata: null,
+    clips: [],
     notice: null,
     diagnostics: result.diagnostics ?? [],
     error: {

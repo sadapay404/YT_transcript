@@ -16,9 +16,10 @@ import { useCallback, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlignLeft, ChevronsDown } from "lucide-react";
 
-import type { TranscriptSegment } from "@/lib/types";
+import type { TranscriptSegment, ViralClip } from "@/lib/types";
 import { cn, formatDuration, readingMinutes } from "@/lib/utils";
 import { TranscriptLine } from "@/components/workspace/TranscriptLine";
+import { ExportMenu } from "@/components/export/ExportMenu";
 import { useFollowAlong } from "@/hooks/useFollowAlong";
 import { usePlaybackStore } from "@/stores/usePlaybackStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
@@ -33,8 +34,10 @@ const NO_SEGMENTS: TranscriptSegment[] = [];
 
 export function TranscriptPane({ className }: TranscriptPaneProps) {
   const transcript = useTranscriptStore((s) => s.transcript);
+  const clips = useTranscriptStore((s) => s.clips);
 
   const showTimestamps = useSettingsStore((s) => s.showTimestamps);
+  const showClipHighlights = useSettingsStore((s) => s.showClipHighlights);
   const autoScroll = useSettingsStore((s) => s.autoScroll);
   const centerActiveLine = useSettingsStore((s) => s.centerActiveLine);
   const reduceMotion = useSettingsStore((s) => s.reduceMotion);
@@ -48,10 +51,23 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
   const measure = useSettingsStore((s) => s.typography.measure);
 
   const activeIndex = usePlaybackStore((s) => s.activeSegmentIndex);
+  const loopRange = usePlaybackStore((s) => s.loopRange);
+  const playbackStatus = usePlaybackStore((s) => s.status);
   const seekTo = usePlaybackStore((s) => s.seekTo);
 
   const segments = transcript?.segments ?? NO_SEGMENTS;
   const forceHours = (transcript?.durationSeconds ?? 0) >= 3600;
+  const clipsBySegment = useMemo(() => {
+    const map = new Map<number, ViralClip[]>();
+    for (const clip of clips) {
+      for (const segmentId of clip.segmentIds) {
+        const current = map.get(segmentId) ?? [];
+        current.push(clip);
+        map.set(segmentId, current);
+      }
+    }
+    return map;
+  }, [clips]);
 
   const { paused, resume, containerRef } = useFollowAlong({
     segments,
@@ -110,12 +126,15 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
           )}
         </div>
 
-        {stats && (
-          <p className="font-mono text-[11px] text-ink-faint tabular-nums">
-            {stats.lines} lines · {stats.words.toLocaleString()} words · {stats.duration} ·{" "}
-            {stats.reading} min read
-          </p>
-        )}
+        <div className="flex items-center gap-2">
+          {stats && (
+            <p className="hidden font-mono text-[11px] text-ink-faint tabular-nums sm:block">
+              {stats.lines} lines · {stats.words.toLocaleString()} words · {stats.duration} ·{" "}
+              {stats.reading} min read
+            </p>
+          )}
+          {transcript && <ExportMenu compact />}
+        </div>
       </header>
 
       {/* ── Lines ──────────────────────────────────────────────────────── */}
@@ -142,6 +161,9 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
                   forceHours={forceHours}
                   reduceMotion={reduceMotion}
                   onSeek={handleSeek}
+                  clips={showClipHighlights ? clipsBySegment.get(segment.id) ?? [] : []}
+                  clipArmed={Boolean(showClipHighlights && clipsBySegment.get(segment.id)?.some((clip) => clip.id === loopRange?.clipId))}
+                  clipPlaying={Boolean(showClipHighlights && (playbackStatus === "playing" || playbackStatus === "buffering") && clipsBySegment.get(segment.id)?.some((clip) => clip.id === loopRange?.clipId))}
                 />
               ))}
             </ol>
