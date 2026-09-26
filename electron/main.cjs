@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
-
+const { readBundledKeys } = require("./bundled-keys.cjs");
 const HOST = "127.0.0.1";
 const SERVER_START_TIMEOUT_MS = 30_000;
 
@@ -129,8 +129,12 @@ async function startNextServer() {
   }
 
   const port = await getAvailablePort();
-  const desktopEnv = readDesktopEnv();
+    const desktopEnv = readDesktopEnv();
+  // Built-in AI keys (packed at build time) are the lowest layer, so a key the
+  // user sets in %APPDATA%\TranStudio\.env.local always takes precedence.
+  const bundledKeys = readBundledKeys();
   const environment = {
+    ...bundledKeys,
     ...desktopEnv,
     ...process.env,
     NODE_ENV: "production",
