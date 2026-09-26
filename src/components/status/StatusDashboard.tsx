@@ -306,7 +306,7 @@ export function StatusDashboard() {
           <Step n={2}>
             <strong className="text-ink">Captions blocked?</strong> Some cloud IP
             ranges cannot reach YouTube. The studio automatically tries the
-            visitor's browser connection; this server-only check may show
+            visitor&apos;s browser connection; this server-only check may show
             <strong className="text-ink"> attention</strong> because it cannot borrow that IP.
           </Step>
           <Step n={3}>
