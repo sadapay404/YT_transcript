@@ -113,13 +113,19 @@ Replaced with a ladder that tries identities and says what it did:
   (N)"*, the transcript header shows the winning strategy, and `/status` reports
   `strategy` + `attempts`. "No transcript" is never a silent verdict.
 - Whole-ladder time budget: a blocked host fails fast with an explanation.
-- When that environmental demo fallback is returned, the client automatically
-  tries `src/lib/transcript/browser-captions.ts` from the visitor's connection.
-  A successful read hydrates the real transcript with `source: "browser"` and a
-  `browser:<format>` strategy. CORS, private/authenticated videos and ordinary
-  network failures remain honest: the demo stays usable, and paste plus the
-  manual **Try from my connection** action remain available without blaming the
-  video.
+- When the server returns an environmental demo **or a server-side video verdict
+  that may be YouTube's IP disguise**, the client automatically tries
+  `src/lib/transcript/browser-captions.ts` from the visitor's connection. The
+  browser asks the player endpoint for signed tracks, then tries unsigned
+  timedtext formats. A successful read hydrates the real transcript with
+  `source: "browser"` and a `browser:<format>` strategy. CORS,
+  private/authenticated videos and ordinary network failures remain honest: the
+  demo stays usable when one was served, and paste plus the manual **Try from my
+  connection** action remain available without blaming the video.
+- The deep health probe marks a known-good caption video as **attention** rather
+  than a false video failure when the Vercel IP is refused. A server health
+  request cannot borrow a visitor's IP, so it reports that limitation instead
+  of claiming the browser path was tested server-side.
 - `TRANSCRIPT_PROXY_URL` now covers **every** request (Innertube POSTs, signed
   and unsigned `timedtext`, watch page) — previously only the library path.
 - Restored the **"Read it. Clip it. Ship it."** slogan as the animated
@@ -259,11 +265,14 @@ The caption probe names the identity that answered and every attempt it made:
 curl -s "https://<your-app>.vercel.app/api/health?deep=1" | grep -A 20 youtube-captions
 ```
 
-Expect `"status": "pass"` with a `strategy` and a `✓` line in `attempts`. If every
-line is `✗` with `LOGIN_REQUIRED`, that host's IP range is being challenged —
-set `TRANSCRIPT_PROXY_URL` (documented in `docs/DEPLOY.md`) and re-check. The
-studio keeps working meanwhile: it shows the bundled demo transcript **and says
-why**, instead of claiming the video has no captions.
+Expect `"status": "pass"` with a `strategy` and a `✓` line in `attempts` when
+that server can reach YouTube. If the known-good probe is refused, the check is
+`"status": "warn"` and explicitly says that the visitor-browser fallback is
+being used — a server request cannot use the visitor's IP. Set
+`TRANSCRIPT_PROXY_URL` (documented in `docs/DEPLOY.md`) if you want the server
+rung green too. The studio still attempts the visitor connection automatically;
+if YouTube refuses browser CORS, it keeps the demo (when available) and offers
+paste/manual retry instead of claiming the video has no captions.
 
 The integration suite can be run against any YouTube stand-in:
 

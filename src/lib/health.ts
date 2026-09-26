@@ -23,6 +23,7 @@ import {
 } from "@/lib/gemini/client";
 import { probeTranscript } from "@/lib/youtube/probe";
 import { normalizeSegments } from "@/lib/youtube/normalize";
+import { parseYouTubeUrl } from "@/lib/utils";
 
 export const APP_VERSION = (packageJson as { version?: string }).version ?? "0.0.0";
 
@@ -312,6 +313,39 @@ async function captionsCheck(video: string): Promise<HealthCheck> {
         ...(result.sample ? { sample: result.sample.slice(0, 120) } : {}),
         // Which identities were tried before this one succeeded — the whole
         // point of the ladder is that a blocked identity is not a dead end.
+        attempted: result.diagnostics.length,
+        ...(result.diagnostics.length > 0
+          ? { attempts: result.diagnostics.join(" · ").slice(0, 600) }
+          : {}),
+      },
+    };
+  }
+
+  const probeVideoId = parseYouTubeUrl(video)?.videoId;
+  const serverError = result.error;
+  const serverOnlyFailure =
+    probeVideoId === HEALTH_PROBE_VIDEO &&
+    serverError &&
+    ["blocked", "empty", "network", "not-found", "too-many-requests"].includes(
+      serverError.code,
+    );
+
+  if (serverOnlyFailure && serverError) {
+    return {
+      id: "youtube-captions",
+      label: "YouTube caption scraping",
+      status: "warn",
+      detail:
+        `The server runtime could not read the known-good probe (${serverError.code}: ` +
+        `${serverError.message}), so the app will use the visitor-browser fallback.`,
+      hint:
+        "This server check cannot borrow a visitor's IP. The app tries the visitor connection automatically; CORS, private videos and ordinary network failures can still require paste.",
+      latencyMs: result.latencyMs,
+      meta: {
+        videoId: result.videoId || video,
+        requested: video,
+        serverFallback: "visitor-browser",
+        ...(result.strategy ? { strategy: result.strategy } : {}),
         attempted: result.diagnostics.length,
         ...(result.diagnostics.length > 0
           ? { attempts: result.diagnostics.join(" · ").slice(0, 600) }

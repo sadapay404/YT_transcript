@@ -112,6 +112,12 @@ export function StatusDashboard() {
 
   const headline = useMemo(() => {
     if (!report) return { text: "Running checks…", tone: "text-ink-soft" };
+    const warnings = report.checks.filter((check) => check.status === "warn").length;
+    if (report.ok && warnings > 0)
+      return {
+        text: `${warnings} check${warnings === 1 ? "" : "s"} needs attention`,
+        tone: "text-amber-700 scheme-dark:text-amber-300",
+      };
     if (report.ok)
       return {
         text: "Everything checks out",
@@ -298,14 +304,16 @@ export function StatusDashboard() {
             <code className="kbd">npm run dev</code>.
           </Step>
           <Step n={2}>
-            <strong className="text-ink">Captions blocked?</strong> Sandboxes, CI
-            runners and some cloud IP ranges cannot reach youtube.com. Deploy to
-            Vercel (free) or run locally — this same page will turn green there.
+            <strong className="text-ink">Captions blocked?</strong> Some cloud IP
+            ranges cannot reach YouTube. The studio automatically tries the
+            visitor's browser connection; this server-only check may show
+            <strong className="text-ink"> attention</strong> because it cannot borrow that IP.
           </Step>
           <Step n={3}>
-            <strong className="text-ink">Still failing on a host?</strong> Some
-            datacenter IPs get throttled by YouTube; set an optional{" "}
-            <code className="kbd">TRANSCRIPT_PROXY_URL</code> and retry.
+            <strong className="text-ink">Want the server rung green?</strong> Set
+            an optional <code className="kbd">TRANSCRIPT_PROXY_URL</code> to a
+            permitted egress and retry. Browser CORS can still require paste for
+            some videos.
           </Step>
           <Step n={4}>
             <strong className="text-ink">From a terminal instead?</strong>{" "}

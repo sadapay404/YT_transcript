@@ -104,6 +104,59 @@ describe("automatic browser caption fallback", () => {
     expect(state.diagnostics).toContain("✗ en · json3 — Failed to fetch");
   });
 
+  it("also retries the visitor connection when the server misclassifies a valid video", async () => {
+    extractTranscriptAction.mockResolvedValue({
+      ok: false,
+      error: "not-found",
+      message: "The video is not playable.",
+      videoId: VIDEO_ID,
+      hint: "The server could not verify the video.",
+      diagnostics: ["✗ innertube:web — UNPLAYABLE"],
+    } satisfies Extract<FetchTranscriptResult, { ok: false }>);
+    fetchCaptionsInBrowser.mockResolvedValue({
+      ok: true,
+      segments: browserSegments,
+      format: "srv3",
+      language: "en",
+      attempts: ["✓ player:en · srv3 — 1 lines"],
+    });
+
+    await useTranscriptStore.getState().extract(INPUT);
+
+    const state = useTranscriptStore.getState();
+    expect(fetchCaptionsInBrowser).toHaveBeenCalledWith(VIDEO_ID, {
+      lang: undefined,
+      timeoutMs: 8_000,
+    });
+    expect(state.status).toBe("success");
+    expect(state.transcript?.source).toBe("browser");
+    expect(state.transcript?.strategy).toBe("browser:srv3");
+    expect(state.error).toBeNull();
+  });
+
+  it("keeps a non-demo server failure actionable when the visitor read also fails", async () => {
+    extractTranscriptAction.mockResolvedValue({
+      ok: false,
+      error: "not-found",
+      message: "The video is not playable.",
+      videoId: VIDEO_ID,
+      diagnostics: ["✗ innertube:web — UNPLAYABLE"],
+    } satisfies Extract<FetchTranscriptResult, { ok: false }>);
+    fetchCaptionsInBrowser.mockResolvedValue({
+      ok: false,
+      reason: "The browser could not read YouTube's captions.",
+      attempts: ["✗ browser · player — Failed to fetch"],
+    });
+
+    await useTranscriptStore.getState().extract(INPUT);
+
+    const state = useTranscriptStore.getState();
+    expect(state.status).toBe("error");
+    expect(state.transcript).toBeNull();
+    expect(state.error?.code).toBe("blocked");
+    expect(state.error?.hint).toContain("paste it here");
+  });
+
   it("does not browser-fetch an explicitly loaded demo", async () => {
     const loaded = demoResult();
     loaded.notice = "This is TranStudio's built-in demo transcript, not a YouTube video.";

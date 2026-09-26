@@ -12,12 +12,13 @@
  *   • This depends on YouTube allowing a cross-origin (CORS) read of the caption
  *     endpoint. It may refuse; that is a dead end we report, not an error we
  *     dress up.
- *   • Only signed/normal caption URLs are requested, one format at a time, with
- *     a short timeout, so a refusal costs a moment and nothing else.
+ *   • The browser first asks YouTube's player endpoint for a signed track, then
+ *     tries unsigned timedtext in json3, srv3 and VTT formats. Each route has a
+ *     short timeout, so a refusal costs a moment and nothing else.
  */
 import { parseCaptionBody } from "@/lib/youtube/parse";
 import { normalizeSegments } from "@/lib/youtube/normalize";
-import { withCaptionFormat, unsignedTimedTextUrl } from "@/lib/youtube/clients";
+import { PRIMARY_CLIENT, withCaptionFormat, unsignedTimedTextUrl } from "@/lib/youtube/clients";
 import type { TranscriptSegment } from "@/lib/types";
 
 export interface BrowserCaptionFailure {
@@ -41,11 +42,16 @@ export type BrowserCaptionResult = BrowserCaptionSuccess | BrowserCaptionFailure
 /** Ordered best-first: real JSON, then the two XML dialects, then WebVTT. */
 const FORMATS = ["json3", "srv3", "vtt"] as const;
 
-async function timedFetch(url: string, timeoutMs: number): Promise<Response> {
+async function timedFetch(
+  url: string,
+  timeoutMs: number,
+  init: RequestInit = {},
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, {
+      ...init,
       // No cookies: a logged-in YouTube session is not required for public
       // captions, and omitting credentials keeps this a plain CORS read.
       credentials: "omit",
@@ -53,6 +59,103 @@ async function timedFetch(url: string, timeoutMs: number): Promise<Response> {
     });
   } finally {
     clearTimeout(timer);
+  }
+}
+
+interface BrowserCaptionCandidate {
+  label: string;
+  base: string;
+  language?: string;
+}
+
+interface PlayerCaptionTrack {
+  baseUrl?: string;
+  languageCode?: string;
+  kind?: string;
+  name?: { simpleText?: string };
+}
+
+interface BrowserPlayerResponse {
+  captions?: {
+    playerCaptionsTracklistRenderer?: {
+      captionTracks?: PlayerCaptionTrack[];
+    };
+  };
+}
+
+/**
+ * Ask YouTube's public player endpoint from the visitor's browser. This is a
+ * second browser-native route: unlike unsigned timedtext, it can reveal the
+ * signed caption URL for videos whose track URL is not predictable. YouTube
+ * may refuse the CORS preflight; that is recorded and the unsigned route still
+ * gets its chance.
+ */
+async function findBrowserPlayerTracks(
+  videoId: string,
+  lang: string | undefined,
+  timeoutMs: number,
+  attempts: string[],
+): Promise<BrowserCaptionCandidate[]> {
+  const endpoint =
+    `https://www.youtube.com/youtubei/v1/player?key=${PRIMARY_CLIENT.apiKey}&prettyPrint=false`;
+
+  try {
+    const response = await timedFetch(endpoint, timeoutMs, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        context: PRIMARY_CLIENT.context,
+        videoId,
+        contentCheckOk: true,
+        racyCheckOk: true,
+      }),
+    });
+
+    if (!response.ok) {
+      attempts.push(`✗ browser · player — HTTP ${response.status}`);
+      return [];
+    }
+
+    const payload = (await response.json()) as BrowserPlayerResponse;
+    const tracks = payload.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
+    const usable = tracks.filter(
+      (track): track is PlayerCaptionTrack & { baseUrl: string; languageCode: string } =>
+        Boolean(track.baseUrl && track.languageCode),
+    );
+
+    if (usable.length === 0) {
+      attempts.push("✗ browser · player — no caption tracks exposed");
+      return [];
+    }
+
+    const wanted = lang?.toLowerCase();
+    const baseWanted = wanted?.split("-")[0];
+    usable.sort((left, right) => {
+      const score = (track: PlayerCaptionTrack & { languageCode: string }) => {
+        const code = track.languageCode.toLowerCase();
+        if (wanted && code === wanted) return 0;
+        if (baseWanted && code === baseWanted) return 1;
+        if (track.kind === "asr") return 3;
+        return 2;
+      };
+      return score(left) - score(right);
+    });
+
+    const selected = usable.slice(0, 3);
+    attempts.push(
+      `✓ browser · player — ${usable.length} caption tracks, trying ${selected.length}`,
+    );
+    return selected.map((track) => ({
+      label: `player:${track.languageCode}${track.kind === "asr" ? " (auto-generated)" : ""}`,
+      base: track.baseUrl,
+      language: track.languageCode,
+    }));
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Failed to fetch";
+    attempts.push(
+      `✗ browser · player — ${detail}. YouTube may have refused the browser CORS request.`,
+    );
+    return [];
   }
 }
 
@@ -70,14 +173,30 @@ export async function fetchCaptionsInBrowser(
   const timeoutMs = options.timeoutMs ?? 8_000;
   const attempts: string[] = [];
 
-  const candidates: Array<{ label: string; base: string }> = [];
+  const candidates: BrowserCaptionCandidate[] = [];
   if (options.captionBaseUrl) {
-    candidates.push({ label: "your player's caption track", base: options.captionBaseUrl });
+    candidates.push({
+      label: "your player's caption track",
+      base: options.captionBaseUrl,
+      language: options.lang,
+    });
+  } else {
+    // Prefer a signed track discovered from the visitor's own player request.
+    // If YouTube refuses that CORS request, the unsigned candidates below still
+    // run exactly as before.
+    candidates.push(...(await findBrowserPlayerTracks(videoId, options.lang, timeoutMs, attempts)));
   }
+
   const language = options.lang?.toLowerCase();
-  const languages = Array.from(new Set([language, language?.split("-")[0], "en"].filter(Boolean))) as string[];
+  const languages = Array.from(
+    new Set([language, language?.split("-")[0], "en"].filter(Boolean)),
+  ) as string[];
   for (const code of languages) {
-    candidates.push({ label: `${code} (auto-generated allowed)`, base: unsignedTimedTextUrl(videoId, code) });
+    candidates.push({
+      label: `${code} (auto-generated allowed)`,
+      base: unsignedTimedTextUrl(videoId, code),
+      language: code,
+    });
   }
 
   for (const candidate of candidates) {
@@ -113,7 +232,7 @@ export async function fetchCaptionsInBrowser(
           ok: true,
           segments: normalized.segments,
           format: parsed.format,
-          language: candidate.label.split(" ")[0],
+          language: candidate.language ?? candidate.label.split(" ")[0],
           attempts,
         };
       } catch (error) {

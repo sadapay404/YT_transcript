@@ -161,12 +161,16 @@ explanation instead of hanging.
 Every attempt is surfaced in the UI (*"What was tried (N)"*) and in
 `/status` (`Strategy`, `attempts`), so "no transcript" is never a silent verdict.
 
-When the server ladder returns the environmental demo, the browser makes one
-best-effort request from the visitor's own connection and replaces the demo if
-YouTube allows the caption read. Direct reads are subject to YouTube's CORS
-policy, private/authenticated videos and ordinary network failures; if that
-request is refused, the demo stays usable and the UI keeps paste and manual
-browser-retry remedies visible.
+When the server ladder returns the environmental demo — or a server-side
+YouTube verdict that may be an IP disguise — the browser makes a best-effort
+request from the visitor's own connection. It first asks YouTube's player
+endpoint for a signed track, then tries unsigned caption formats, replacing the
+demo or server error if a real transcript comes back. Direct reads are subject
+to YouTube's CORS policy, private/authenticated videos and ordinary network
+failures; if refused, the demo stays usable when available and the UI keeps
+paste and manual browser-retry remedies visible. The deep health report marks
+the known-good probe as attention when Vercel itself is refused, because a
+server health request cannot borrow a visitor's IP.
 
 `scripts/fake-youtube.mjs` reproduces the failure locally — it bot-walls the WEB
 identity exactly like a datacenter IP — and the opt-in integration suite proves

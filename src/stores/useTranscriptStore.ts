@@ -59,7 +59,7 @@ interface TranscriptState {
   fetchInBrowser: (options?: {
     silent?: boolean;
     timeoutMs?: number;
-    /** Internal target used by the automatic fallback after a server demo. */
+    /** Internal target used by the automatic fallback after a server result. */
     videoId?: string;
     expectedInput?: string;
   }) => Promise<{ ok: boolean; message: string }>;
@@ -165,12 +165,11 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     const finishBrowserFailure = (reason: string, attempts: string[]) => {
       if (!isCurrentRequest()) return { ok: false, message: reason };
 
-      const notice =
-        `${fallbackNotice ?? "The server could not load this video's captions."} ` +
-        "A direct browser read was not available — YouTube, CORS, or the network refused the request. " +
-        "The demo remains usable; paste a transcript or choose “Try from my connection” to retry.";
-
-      if (options.silent || hadDemoTranscript) {
+      if (hadDemoTranscript) {
+        const notice =
+          `${fallbackNotice ?? "The server could not load this video's captions."} ` +
+          "A direct browser read was not available — YouTube, CORS, or the network refused the request. " +
+          "The demo remains usable; paste a transcript or choose “Try from my connection” to retry.";
         set((state) => ({
           status: "success",
           error: null,
@@ -281,31 +280,40 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       const result = await extractTranscriptAction(trimmed);
       applyResult(result, set);
 
-      // The server remains the first path. Its demo result is an environmental
-      // fallback, not an answer about the requested video, so give the visitor
-      // one best-effort read from their own connection before settling on demo.
-      if (result.ok && result.transcript.source === "demo" && requestedVideoId) {
+      // The server remains the first path. A demo is an environmental fallback,
+      // not an answer about the requested video; an error can also be a disguised
+      // YouTube server-IP verdict (for example, UNPLAYABLE from every client).
+      // Give the visitor one best-effort read from their own connection for both
+      // cases before settling on an error or the demo.
+      const shouldTryBrowser = Boolean(
+        requestedVideoId &&
+          (result.ok ? result.transcript.source === "demo" : result.error !== "invalid-url"),
+      );
+      if (shouldTryBrowser && requestedVideoId) {
+        const preservingDemo = result.ok && result.transcript.source === "demo";
         try {
           await get().fetchInBrowser({
-            silent: true,
+            ...(preservingDemo ? { silent: true } : {}),
             timeoutMs: 8_000,
             videoId: requestedVideoId,
             expectedInput: trimmed,
           });
         } catch (error) {
-          // Keep the usable demo even if a future browser helper throws outside
-          // its typed failure result. Never turn an environmental failure into
-          // a claim that the requested video itself is broken.
-          const reason = error instanceof Error ? error.message : "the browser request failed";
-          if (get().input === trimmed && get().transcript?.source === "demo") {
-            set({
-              status: "success",
-              error: null,
-              notice:
-                `${get().notice ?? "The server could not load this video's captions."} ` +
-                `A direct browser read was not available — YouTube, CORS, or the network refused the request (${reason}). ` +
-                "The demo remains usable; paste a transcript or choose “Try from my connection” to retry.",
-            });
+          // Keep the server's typed result if a future browser helper throws
+          // outside its typed failure result. Never turn an environmental
+          // failure into a claim that the requested video itself is broken.
+          if (get().input === trimmed) {
+            applyResult(result, set);
+            if (preservingDemo) {
+              const reason =
+                error instanceof Error ? error.message : "the browser request failed";
+              set({
+                notice:
+                  `${get().notice ?? "The server could not load this video's captions."} ` +
+                  `A direct browser read was not available — YouTube, CORS, or the network refused the request (${reason}). ` +
+                  "The demo remains usable; paste a transcript or choose “Try from my connection” to retry.",
+              });
+            }
           }
         }
       }
