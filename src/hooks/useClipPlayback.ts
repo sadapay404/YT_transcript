@@ -77,7 +77,7 @@ export async function copyClip(clip: ViralClip): Promise<void> {
   await writeClipboard(content);
 }
 
-async function writeClipboard(text: string): Promise<void> {
+export async function writeClipboard(text: string): Promise<void> {
   if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
     return;

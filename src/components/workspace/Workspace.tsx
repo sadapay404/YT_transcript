@@ -11,7 +11,7 @@
  */
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, ChevronRight, ClipboardPaste, Info, Keyboard, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronRight, ClipboardPaste, Info, Keyboard, Maximize2, Minimize2, RefreshCw } from "lucide-react";
 
 import { cn, shouldPullIntoView } from "@/lib/utils";
 import { PasteTranscriptDialog } from "@/components/workspace/PasteTranscriptDialog";
@@ -19,7 +19,7 @@ import { UrlBar } from "@/components/workspace/UrlBar";
 import { TranscriptPane } from "@/components/workspace/TranscriptPane";
 import { VideoPane } from "@/components/workspace/VideoPane";
 import { AssistantPanel } from "@/components/assistant/AssistantPanel";
-import { useCinemaFrame } from "@/hooks/useCinemaFrame";
+import { useCinemaShrink } from "@/hooks/useCinemaShrink";
 import { usePlaybackStore } from "@/stores/usePlaybackStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useTranscriptStore } from "@/stores/useTranscriptStore";
@@ -46,8 +46,18 @@ export function Workspace() {
   const canTryBrowser = transcript?.source === "demo" && notice?.includes("This host cannot");
   const readingOnly = viewMode === "read";
   const cinema = viewMode === "cinema";
-  const cinemaFrame = useCinemaFrame({
-    enabled: cinema && hasTranscript,
+  /**
+   * Theater: Cinema with something to watch. The page stops scrolling, the
+   * landing steps aside, and the studio fills exactly the space between the
+   * header and the credits — so the footer can never ride over the video.
+   */
+  const theater = cinema && hasTranscript && !(status === "error" && error);
+  const {
+    stageRef: cinemaStageRef,
+    compact: cinemaCompact,
+    toggle: toggleCinemaSize,
+  } = useCinemaShrink({
+    enabled: theater,
     resetKey: transcript ? `${transcript.videoId}@${transcript.fetchedAt}` : "empty",
   });
 
@@ -73,6 +83,22 @@ export function Workspace() {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     element.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
   }, [mounted]);
+
+  /* ── Theater owns the viewport ────────────────────────────────────────── */
+  useEffect(() => {
+    if (!theater) return;
+    const html = document.documentElement;
+    const root = rootRef.current;
+    html.dataset.theater = "";
+    window.scrollTo({ top: 0, behavior: "auto" });
+    return () => {
+      delete html.dataset.theater;
+      // Back to the scrolling page: land on the studio, not the landing hero.
+      requestAnimationFrame(() => {
+        if (root?.isConnected) root.scrollIntoView({ block: "start" });
+      });
+    };
+  }, [theater]);
 
   /* ── Keyboard shortcuts (only when the reader isn't typing) ───────────── */
   useEffect(() => {
@@ -112,7 +138,11 @@ export function Workspace() {
     {mounted && (
     <div
       ref={rootRef}
-      className="mx-auto flex w-full max-w-[1900px] flex-1 scroll-mt-16 flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4">
+      data-theater={theater ? "" : undefined}
+      className={cn(
+        "mx-auto flex w-full max-w-[1900px] flex-1 scroll-mt-16 flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4",
+        theater && "min-h-0 gap-2 py-2 sm:py-2.5",
+      )}>
       {/* ── Input row ───────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-2">
         <UrlBar />
@@ -122,10 +152,17 @@ export function Workspace() {
       <AnimatePresence initial={false}>
         {notice && hasTranscript && (
           <Notice tone="info" icon={<Info className="h-3.5 w-3.5" />}>
-            <div className="flex flex-col gap-2">
-              <span>{notice} The app stays fully usable — reading, seeking and exporting all work.</span>
+            <div className={cn("flex gap-2", theater ? "flex-col lg:flex-row lg:items-center" : "flex-col")}>
+              {/* In Cinema every pixel of height belongs to the video and the
+                  transcript, so the notice keeps to two lines (full text on hover). */}
+              <span
+                className={cn(theater && "line-clamp-2 lg:flex-1")}
+                title={theater ? notice : undefined}
+              >
+                {notice} The app stays fully usable — reading, seeking and exporting all work.
+              </span>
               {canTryBrowser && (
-                <span className="flex flex-wrap items-center gap-2">
+                <span className="flex shrink-0 flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => void fetchInBrowser()}
@@ -150,7 +187,7 @@ export function Workspace() {
       </AnimatePresence>
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
-      <div className="min-w-0 flex-1">
+      <div className={cn("min-w-0 flex-1", theater && "flex min-h-0 flex-col")}>
       <AnimatePresence mode="wait" initial={false}>
         {status === "loading" && !hasTranscript ? (
           <LoadingState key="loading" />
@@ -168,20 +205,23 @@ export function Workspace() {
         ) : (
           <motion.div
             key="studio"
-            ref={cinema ? cinemaFrame.frameRef : undefined}
+            // Always attached: motion components do not re-run a ref that changes
+            // after mount. The hook itself is gated by `enabled`.
+            ref={cinemaStageRef}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
-            data-cinema-frame={cinema ? "" : undefined}
+            data-cinema-frame={theater ? "" : undefined}
             className={cn(
               "min-h-0 flex-1 gap-3",
               // Split: side-by-side, transcript rail beside the player.
               viewMode === "split" &&
                 "grid xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]",
-              // Cinema: a viewport-bounded frame. The player always fits and
-              // shrinks as you scroll; the transcript scrolls inside the rest.
-              cinema && "flex h-[calc(100dvh-4.5rem)] min-h-[26rem] flex-col",
+              // Cinema: a size container. CSS derives the player from the
+              // space available, so it always fits; the transcript takes the rest.
+              theater && "cinema-stage flex min-h-0 flex-1 flex-col items-center",
+              cinema && !theater && "flex flex-col",
               // Read: transcript only, centred to a comfortable measure.
               readingOnly && "mx-auto grid w-full max-w-3xl grid-cols-1",
             )}
@@ -191,7 +231,6 @@ export function Workspace() {
               {!readingOnly && (
                 <motion.div
                   key="player-pane"
-                  ref={cinema ? cinemaFrame.playerRef : undefined}
                   // Cinema resizes continuously with scroll; a layout
                   // animation there would scale the iframe and lag behind.
                   layout={!cinema}
@@ -202,18 +241,19 @@ export function Workspace() {
                   className={cn(
                     "panel relative z-0 overflow-visible",
                     viewMode === "split" && "xl:sticky xl:top-[3.75rem] xl:self-start",
-                    cinema && "mx-auto w-full max-w-5xl shrink-0",
+                    theater && "cinema-player",
                   )}
-                  style={
-                    cinema && cinemaFrame.ready
-                      ? { width: cinemaFrame.geometry.playerWidth, maxWidth: "100%" }
-                      : undefined
-                  }
+                  data-cinema-player={theater ? "" : undefined}
                 >
                   <VideoPane />
 
                   {/* Title block */}
-                  <div className="flex items-start justify-between gap-3 border-t border-line px-3 py-2.5">
+                  <div
+                    className={cn(
+                      "flex items-start justify-between gap-3 border-t border-line px-3 py-2.5",
+                      theater && "items-center py-2",
+                    )}
+                  >
                     <div className="min-w-0">
                       <h1 className="truncate text-[13.5px] font-semibold text-ink">
                         {metadata?.title || (transcript?.source === "demo" ? "Demo transcript" : "Untitled video")}
@@ -224,6 +264,22 @@ export function Workspace() {
                         </p>
                       )}
                     </div>
+                    {theater && (
+                      <button
+                        type="button"
+                        onClick={toggleCinemaSize}
+                        data-cinema-toggle
+                        title={cinemaCompact ? "Make the video bigger" : "Make the video smaller"}
+                        aria-label={cinemaCompact ? "Make the video bigger" : "Make the video smaller"}
+                        className="btn btn-icon h-8 w-8 shrink-0 border border-line"
+                      >
+                        {cinemaCompact ? (
+                          <Maximize2 className="h-3.5 w-3.5" />
+                        ) : (
+                          <Minimize2 className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -235,7 +291,7 @@ export function Workspace() {
               transition={SPRING}
               className={cn(
                 "panel relative z-10 flex min-h-0 flex-col overflow-visible",
-                cinema && "mx-auto w-full max-w-5xl flex-1",
+                theater && "w-full max-w-5xl flex-1",
                 viewMode === "split" && "xl:max-h-[calc(100dvh-11rem)]",
                 readingOnly && "read-mode-panel",
               )}
@@ -249,7 +305,7 @@ export function Workspace() {
       <AssistantPanel />
 
       {/* ── Shortcut hint ───────────────────────────────────────────────── */}
-      {hasTranscript && !readingOnly && (
+      {hasTranscript && !readingOnly && !theater && (
         <p className="hidden items-center justify-center gap-3 pb-1 text-[11px] text-ink-faint md:flex">
           <span className="inline-flex items-center gap-1">
             <Keyboard className="h-3 w-3" />
@@ -285,9 +341,12 @@ function Notice({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: -6, height: 0 }}
-      animate={{ opacity: 1, y: 0, height: "auto" }}
-      exit={{ opacity: 0, y: -6, height: 0 }}
+      // No `height: "auto"` here: Framer measures auto heights by restoring
+      // window scroll (`window.scrollTo`), which cancelled the studio's
+      // smooth glide into view whenever a notice arrived with the transcript.
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
       className={cn(
         "flex items-start gap-2 overflow-hidden rounded-xl border px-3 py-2 text-[12px] leading-relaxed",
         tone === "info"

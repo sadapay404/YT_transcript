@@ -10,7 +10,7 @@ const HEADLINE = ["Read", "it.", "Clip", "it.", "Ship", "it."];
 
 export function LandingView() {
   return (
-    <main className="mx-auto w-full max-w-[1400px] px-4 pt-10 pb-20 sm:px-6">
+    <main data-landing className="mx-auto w-full max-w-[1400px] px-4 pt-10 pb-20 sm:px-6">
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <section className="flex flex-col items-center text-center">
         <h1 className="text-4xl leading-[1.05] font-black tracking-tight sm:text-6xl lg:text-7xl">

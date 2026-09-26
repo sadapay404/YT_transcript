@@ -8,6 +8,8 @@
 import { create } from "zustand";
 
 import type {
+  AiProviderChoice,
+  AiProviderId,
   ChatHistoryEntry,
   ChatMessage,
   ChatMode,
@@ -16,6 +18,43 @@ import type {
 } from "@/lib/types";
 import { mapClipPlan } from "@/lib/clips/map";
 import { useTranscriptStore } from "@/stores/useTranscriptStore";
+import { useSettingsStore } from "@/stores/useSettingsStore";
+
+/** The one-click viral clip request (panel hero, transcript CTA, quick chip). */
+export const VIRAL_CLIPS_PROMPT = "Find the most viral, hook-first clips in this video.";
+
+const AI_PREFS_KEY = "transtudio.ai.v1";
+interface AiPrefs {
+  provider: AiProviderChoice;
+  /** Last model that answered per provider — sent as a hint so the server starts there. */
+  models: Partial<Record<AiProviderId, string>>;
+}
+
+function readAiPrefs(): AiPrefs {
+  const fallback: AiPrefs = { provider: "auto", models: {} };
+  if (typeof window === "undefined") return fallback;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(AI_PREFS_KEY) ?? "null") as Partial<AiPrefs> | null;
+    if (!parsed || typeof parsed !== "object") return fallback;
+    const provider =
+      parsed.provider === "gemini" || parsed.provider === "groq" || parsed.provider === "auto"
+        ? parsed.provider
+        : "auto";
+    const models = parsed.models && typeof parsed.models === "object" ? parsed.models : {};
+    return { provider, models };
+  } catch {
+    return fallback;
+  }
+}
+
+function writeAiPrefs(update: (prefs: AiPrefs) => AiPrefs): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(AI_PREFS_KEY, JSON.stringify(update(readAiPrefs())));
+  } catch {
+    // Private mode / storage full: the choice simply isn't remembered.
+  }
+}
 
 interface ChatState {
   messages: ChatMessage[];
@@ -29,6 +68,13 @@ interface ChatState {
   /** Re-run the last failed request without leaving a duplicate failed turn. */
   retryLast: () => Promise<void>;
   clear: () => void;
+  /** Which AI answers: Auto (Gemini → Groq backup), or a manual choice. */
+  provider: AiProviderChoice;
+  setProvider: (provider: AiProviderChoice) => void;
+  /** Load the remembered provider choice (client only, after hydration). */
+  hydrateAiPrefs: () => void;
+  /** Open NexAI and immediately ask for viral clips. */
+  findViralClips: () => void;
 }
 
 let activeAbort: AbortController | null = null;
@@ -38,6 +84,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   mode: "chat",
   isStreaming: false,
+  provider: "auto",
+
+  setProvider: (provider) => {
+    set({ provider });
+    writeAiPrefs((prefs) => ({ ...prefs, provider }));
+  },
+
+  hydrateAiPrefs: () => {
+    const { provider } = readAiPrefs();
+    if (provider !== get().provider) set({ provider });
+  },
+
+  findViralClips: () => {
+    const settings = useSettingsStore.getState();
+    if (!settings.sidebarOpen) settings.setSidebarOpen(true);
+    if (get().isStreaming) return;
+    void get().sendMessage(VIRAL_CLIPS_PROMPT, "clips");
+  },
 
   setMode: (mode) => set({ mode }),
 
@@ -96,6 +160,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           content: "",
           createdAt: startedAt,
           status: "streaming",
+          mode,
         },
       ],
     }));
@@ -121,6 +186,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         language: transcript.language,
       },
       history: priorHistory,
+      provider: get().provider,
+      preferredModels: readAiPrefs().models,
     };
 
     const abort = new AbortController();
@@ -242,7 +309,16 @@ function handleEvent(
       }));
       return;
     case "meta":
-      updateAssistant(assistantId, (message) => ({ ...message, model: event.model }));
+      updateAssistant(assistantId, (message) => ({
+        ...message,
+        model: event.model,
+        ...(event.provider ? { provider: event.provider } : {}),
+        ...(event.note ? { note: event.note } : {}),
+      }));
+      if (event.provider && event.model) {
+        const provider = event.provider;
+        writeAiPrefs((prefs) => ({ ...prefs, models: { ...prefs.models, [provider]: event.model } }));
+      }
       return;
     case "clips": {
       const clips = mapClipPlan(event.plan, transcript);

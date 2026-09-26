@@ -1,9 +1,11 @@
 "use client";
 
-import { RotateCw } from "lucide-react";
+import { AlertCircle, RotateCw } from "lucide-react";
 
 import type { ChatMessage } from "@/lib/types";
+import { GeminiLogo, GroqLogo, NexAIMark } from "@/components/assistant/AiLogos";
 import { ClipPlanList } from "@/components/assistant/ClipPlanList";
+import { ClipScanning } from "@/components/assistant/ClipScanning";
 import { RichText } from "@/components/assistant/RichText";
 import { useTranscriptStore } from "@/stores/useTranscriptStore";
 
@@ -14,43 +16,78 @@ export function AssistantMessage({
   message: ChatMessage;
   onRetry?: () => void;
 }) {
-  const user = message.role === "user";
   const clips = useTranscriptStore((state) => state.clips);
+  const lines = useTranscriptStore((state) => state.transcript?.segments.length ?? 0);
+
+  if (message.role === "user") {
+    return (
+      <article className="flex justify-end" data-message-id={message.id} data-message-role="user">
+        <div className="bubble-user nexai-user max-w-[86%] rounded-2xl rounded-br-md px-3 py-2">
+          <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink">{message.content}</p>
+        </div>
+      </article>
+    );
+  }
+
+  const streaming = message.status === "streaming";
+  const waiting = streaming && !message.content && !message.clipPlan;
+  const clipTurn = message.mode === "clips";
+
   return (
-    <article
-      className={user ? "flex justify-end" : "flex justify-start"}
-      data-message-id={message.id}
-      data-message-role={message.role}
-    >
-      <div className={user ? "bubble-user max-w-[88%] px-3 py-2" : "bubble-assistant max-w-[94%] px-3 py-2"}>
-        {user ? (
-          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink">{message.content}</p>
-        ) : (
-          <div className={message.status === "streaming" ? "stream-caret" : ""}>
-            <RichText content={message.content} />
-          </div>
-        )}
-        {message.error && (
-          <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 border-t border-danger/20 pt-1.5 text-[11px] leading-relaxed text-danger">
-            <span>{message.error}</span>
+    <article className="flex items-start gap-2" data-message-id={message.id} data-message-role="assistant">
+      <span className="nexai-avatar mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg">
+        <NexAIMark className="h-4 w-4" animated={streaming} />
+      </span>
+      <div className="min-w-0 flex-1">
+        {waiting ? (
+          clipTurn ? (
+            <ClipScanning lines={lines} />
+          ) : (
+            <div className="nexai-thinking inline-flex items-center gap-1.5 rounded-2xl rounded-tl-md px-3 py-2.5" aria-label="NexAI is thinking">
+              <span className="nexai-dot" />
+              <span className="nexai-dot" />
+              <span className="nexai-dot" />
+            </div>
+          )
+        ) : message.status === "error" ? (
+          <div role="alert" className="rounded-2xl rounded-tl-md border border-danger/25 bg-danger/[0.06] px-3 py-2.5">
+            <p className="flex items-start gap-1.5 text-[12px] leading-relaxed text-ink">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger" />
+              <span>{message.error ?? message.content}</span>
+            </p>
             {onRetry && (
               <button
                 type="button"
                 onClick={onRetry}
-                className="btn h-7 gap-1.5 border border-danger/30 px-2 text-[10.5px] text-danger hover:border-danger hover:bg-danger/10"
+                className="btn mt-2 h-7 gap-1.5 rounded-full border border-danger/30 px-2.5 text-[10.5px] text-danger hover:border-danger hover:bg-danger/10"
               >
-                <RotateCw className="h-3 w-3" /> Retry assistant
+                <RotateCw className="h-3 w-3" /> Retry
               </button>
             )}
           </div>
+        ) : (
+          <div className={clipTurn && message.clipPlan ? "" : "bubble-assistant rounded-2xl rounded-tl-md px-3 py-2"}>
+            {message.clipPlan ? (
+              <ClipPlanList plan={message.clipPlan} clips={clips} />
+            ) : (
+              <div className={streaming ? "stream-caret" : ""}>
+                <RichText content={message.content} />
+              </div>
+            )}
+          </div>
         )}
-        {!user && (message.model || message.latencyMs) && (
-          <p className="mt-2 border-t border-line pt-1.5 font-mono text-[9px] text-ink-faint">
-            {message.model ? `answered by ${message.model}` : "assistant"}
-            {message.latencyMs ? ` · ${(message.latencyMs / 1000).toFixed(1)}s` : ""}
+
+        {!waiting && message.status !== "error" && (message.provider || message.latencyMs) && (
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 text-[10px] text-ink-faint">
+            {message.provider === "gemini" && <GeminiLogo className="h-3 w-3" />}
+            {message.provider === "groq" && <GroqLogo className="h-3 w-3" />}
+            <span>
+              {message.provider === "groq" ? "Groq" : message.provider === "gemini" ? "Gemini" : "NexAI"}
+              {message.latencyMs && !streaming ? ` · ${(message.latencyMs / 1000).toFixed(1)}s` : ""}
+            </span>
+            {message.note && <span className="basis-full text-ink-faint/90">{message.note}</span>}
           </p>
         )}
-        {!user && message.clipPlan && <ClipPlanList plan={message.clipPlan} clips={clips} />}
       </div>
     </article>
   );

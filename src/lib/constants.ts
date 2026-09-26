@@ -54,7 +54,7 @@ export const THEMES: ThemeDefinition[] = [
   },
   {
     id: "zen",
-    label: "Mubashir's Favourite Zen Paper",
+    label: "Zen Paper (Mubashir's Fav.)",
     tagline: "Warm ink on cream paper. Distraction-free reading.",
     detail: "The default reading desk: tactile paper, calm contrast and warm ink.",
     scheme: "light",
@@ -377,14 +377,14 @@ export const GEMINI = {
    * written for — but Google can retire a model for *new* accounts while it
    * keeps working for older ones, so nothing here assumes it will answer.
    */
-  defaultModel: "gemini-2.5-flash",
-  fallbackModel: "gemini-2.5-flash-lite",
+  defaultModel: "gemini-flash-latest",
+  fallbackModel: "gemini-flash-lite-latest",
   /**
-   * Tried in order when Google reports the preferred model as unavailable.
-   * Google's own error message usually names a replacement; that name is
-   * preferred over this list, which is only a backstop.
+   * Last-resort names, used only when ListModels discovery is unreachable.
+   * Normally the app asks Google which models this key can call and ranks
+   * those (see `lib/gemini/models.ts`), so nothing here has to stay current.
    */
-  modelFallbacks: ["gemini-3.8-flash", "gemini-flash-latest"],
+  modelFallbacks: ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
   /** Model auto-detected via ListModels is cached this long. */
   modelCacheTtlMs: 10 * 60 * 1000,
   temperature: { chat: 0.7, clips: 0.55, summary: 0.4 },

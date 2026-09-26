@@ -56,7 +56,7 @@ In **Settings → Environment Variables** (or on the import screen, at the botto
 | Name             | Value                | Environments                     |
 | ---------------- | -------------------- | -------------------------------- |
 | `GEMINI_API_KEY` | your key             | Production, Preview, Development |
-| `GEMINI_MODEL`   | `gemini-2.5-flash`   | optional — this is already the default |
+| `GROQ_API_KEY`   | your Groq key        | optional — fast free backup for NexAI (console.groq.com/keys) |
 
 > No key yet? Deploy anyway. The app builds and runs fine without it; only the AI
 > sidebar (Steps 4–5) is disabled, and `/status` will tell you exactly that.
@@ -336,8 +336,8 @@ variables or protection settings. Only the `.vercel.app` hostnames change.
 
 ```bash
 GEMINI_API_KEY=            # free key — required for the AI sidebar (Steps 4–5)
-GEMINI_MODEL=gemini-2.5-flash        # any free-tier Gemini model id
-GEMINI_FALLBACK_MODEL=gemini-2.5-flash-lite
+GROQ_API_KEY=              # optional free backup AI (no card); used when Gemini is busy
+GEMINI_MODEL=              # optional pin; normally unset (models are auto-discovered)
 TRANSCRIPT_PROXY_URL=      # optional egress proxy for caption scraping
 TRANSTUDIO_DEMO_MODE=1     # force the bundled demo transcript (no scraping)
 ```

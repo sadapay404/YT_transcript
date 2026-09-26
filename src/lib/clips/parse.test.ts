@@ -26,3 +26,37 @@ describe("clip response parsing", () => {
     expect(() => parseClipPlan("I could not find any clips.")).toThrow("no usable clip plan");
   });
 });
+
+describe("clip post extras", () => {
+  it("keeps hook line, caption and normalises hashtags", () => {
+    const plan = parseClipPlan(
+      JSON.stringify({
+        clips: [
+          {
+            title: "Hook",
+            start_time: 1,
+            end_time: 31,
+            transcript_text: "Nobody tells you this",
+            viral_score: 88,
+            hook_line: "Nobody tells you this",
+            caption: "The truth about morning routines.",
+            hashtags: "#Morning, routine ##habits #morning",
+          },
+        ],
+      }),
+    );
+    expect(plan.clips[0]).toMatchObject({
+      hook_line: "Nobody tells you this",
+      caption: "The truth about morning routines.",
+      hashtags: ["#Morning", "#routine", "#habits", "#morning"],
+    });
+  });
+
+  it("leaves the extras out when the model omits them", () => {
+    const plan = parseClipPlan(
+      JSON.stringify({ clips: [{ title: "x", start_time: 0, end_time: 20, transcript_text: "y", viral_score: 5 }] }),
+    );
+    expect(plan.clips[0]).not.toHaveProperty("hashtags");
+    expect(plan.clips[0]).not.toHaveProperty("caption");
+  });
+});

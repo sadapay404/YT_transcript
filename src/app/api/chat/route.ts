@@ -2,22 +2,35 @@ import { GEMINI } from "@/lib/constants";
 import { CLIP_PLAN_SCHEMA, ASSISTANT_SYSTEM_PROMPT, buildUserPrompt } from "@/lib/gemini/prompts";
 import {
   classifyGeminiError,
-  extractRecommendedModel,
   getGeminiClient,
+  isGeminiConfigured,
   modelCandidates,
-  markGeminiModelUnavailable,
-  queueSuggestion,
-  rememberGeminiModel,
   runWithModelFallback,
-  type GeminiFailure,
+  sanitizeModelId,
 } from "@/lib/gemini/client";
+import { discoverGeminiModels } from "@/lib/gemini/models";
+import {
+  GroqError,
+  estimateTokens,
+  groqComplete,
+  groqPromptBudgetCharacters,
+  groqStream,
+  isGroqConfigured,
+  listGroqModels,
+  planGroqModels,
+} from "@/lib/ai/groq";
 import { parseClipPlan } from "@/lib/clips/parse";
+import { providerOrder } from "@/lib/ai/providers";
 import type {
+  AiProviderChoice,
+  AiProviderId,
+  AiProviderStatus,
   ChatHistoryEntry,
   ChatMode,
   ChatRequest,
   ChatStreamEvent,
   ChatTranscriptContext,
+  ClipPlan,
 } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -26,12 +39,28 @@ export const revalidate = 0;
 export const maxDuration = 60;
 
 const MODES = new Set<ChatMode>(["chat", "clips", "summary", "chapters"]);
+const PROVIDERS = new Set<AiProviderChoice>(["auto", "gemini", "groq"]);
 const MAX_MESSAGE = 4_000;
 const MAX_HISTORY_TURNS = 8;
 const MAX_HISTORY_CHARACTERS = 6_000;
 const MAX_SEGMENTS = 6_000;
-/** Keep the four-call fallback inside the route's 60s budget. */
-const GEMINI_REQUEST_TIMEOUT_MS = 14_000;
+/** Whole-request budget, inside the route's 60s limit. */
+const ROUTE_BUDGET_MS = 54_000;
+/** Time kept back for the backup provider when the first one stalls. */
+const BACKUP_RESERVE_MS = 14_000;
+/** A clip plan is one long JSON answer; give it room. */
+const CLIP_ATTEMPT_TIMEOUT_MS = 38_000;
+/** Streaming answers must start within this, or the next model gets a turn. */
+const FIRST_TOKEN_TIMEOUT_MS = 18_000;
+const GROQ_ATTEMPT_TIMEOUT_MS = 25_000;
+
+const LABEL: Record<AiProviderId, string> = { gemini: "Google Gemini", groq: "Groq" };
+
+/** Which providers this installation can use — drives the NexAI picker. */
+export async function GET(): Promise<Response> {
+  const status: AiProviderStatus = { gemini: isGeminiConfigured(), groq: isGroqConfigured() };
+  return Response.json(status, { headers: { "cache-control": "no-store" } });
+}
 
 /**
  * The assistant is a public API route, so it validates and caps its input even
@@ -62,9 +91,8 @@ export async function POST(request: Request): Promise<Response> {
       };
 
       void produce(payload, emit)
-        .catch((error: unknown) => {
-          const failure = classifyGeminiError(error);
-          emit({ type: "error", code: failure.kind, message: userFacingFailure(failure) });
+        .catch(() => {
+          emit({ type: "error", code: "unknown", message: FAILURE_TEXT.unknown });
         })
         .finally(() => {
           emit({ type: "done" });
@@ -83,145 +111,291 @@ export async function POST(request: Request): Promise<Response> {
   });
 }
 
+/* ───────────────────────────── Orchestration ───────────────────────────── */
+
+type ProviderOutcome =
+  | { ok: true }
+  | { ok: false; kind: string; emittedText: boolean };
+
 async function produce(
   payload: ChatRequest,
   emit: (event: ChatStreamEvent) => void,
 ): Promise<void> {
-  if (payload.mode === "clips") {
-    await produceClipPlan(payload, emit);
+  const deadline = Date.now() + ROUTE_BUDGET_MS;
+  const configured: AiProviderStatus = { gemini: isGeminiConfigured(), groq: isGroqConfigured() };
+  const choice = payload.provider ?? "auto";
+  const order = providerOrder(choice, configured);
+
+  if (order.length === 0) {
+    emit({ type: "error", code: "missing-key", message: FAILURE_TEXT["missing-key"] });
     return;
   }
-  await produceStream(payload, emit);
-}
 
-async function produceClipPlan(
-  payload: ChatRequest,
-  emit: (event: ChatStreamEvent) => void,
-): Promise<void> {
-  const prompt = buildUserPrompt(payload.mode, payload.message, payload.transcript, payload.history);
-  const result = await runWithModelFallback(async (model) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), GEMINI_REQUEST_TIMEOUT_MS);
-    try {
-      const ai = getGeminiClient();
-      return await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          systemInstruction: ASSISTANT_SYSTEM_PROMPT,
-          temperature: GEMINI.temperature.clips,
-          maxOutputTokens: GEMINI.maxOutputTokens.clips,
-          responseMimeType: "application/json",
-          responseJsonSchema: CLIP_PLAN_SCHEMA,
-          abortSignal: controller.signal,
-        },
-      });
-    } finally {
-      clearTimeout(timer);
+  const failures: string[] = [];
+  for (let index = 0; index < order.length; index += 1) {
+    const provider = order[index];
+    const isLast = index === order.length - 1;
+    // An honest, quiet note whenever the answer isn't from the chosen provider.
+    let note: string | undefined;
+    if (choice !== "auto" && provider !== choice) {
+      note = configured[choice]
+        ? `${LABEL[choice]} couldn't answer just now — answered by ${LABEL[provider]} instead.`
+        : `${LABEL[choice]} isn't set up on this installation — answered by ${LABEL[provider]}.`;
+    } else if (index > 0) {
+      note = `${LABEL[order[0]]} was busy — answered by ${LABEL[provider]} (backup).`;
     }
-  });
 
-  if (!result.ok) {
-    emit({ type: "error", code: result.failure.kind, message: userFacingFailure(result.failure) });
-    return;
+    const budgetEnd = isLast ? deadline : deadline - BACKUP_RESERVE_MS;
+    const outcome =
+      provider === "gemini"
+        ? await runGemini(payload, emit, budgetEnd, note)
+        : await runGroq(payload, emit, deadline, note);
+    if (outcome.ok) return;
+    failures.push(outcome.kind);
+    // Once words have reached the reader, switching provider would splice two
+    // different answers together. Stop and offer Retry instead.
+    if (outcome.emittedText) break;
+    if (Date.now() >= deadline - 2_000) break;
   }
 
-  emit({ type: "meta", model: result.model });
-  try {
-    const plan = parseClipPlan(result.value.text ?? "");
-    emit({ type: "clips", plan });
-    if (plan.summary) emit({ type: "delta", text: plan.summary });
-  } catch (error) {
-    emit({
-      type: "error",
-      code: "invalid-response",
-      message: error instanceof Error ? error.message : "Gemini returned an unusable clip plan.",
-    });
+  emit({ type: "error", code: failureCode(failures), message: failureText(failures) });
+}
+
+/* ──────────────────────────────── Gemini ──────────────────────────────── */
+
+async function runGemini(
+  payload: ChatRequest,
+  emit: (event: ChatStreamEvent) => void,
+  deadline: number,
+  note?: string,
+): Promise<ProviderOutcome> {
+  const discovered = await discoverGeminiModels();
+  const candidates = modelCandidates({ preferred: [payload.preferredModels?.gemini], discovered });
+  const prompt = buildUserPrompt(payload.mode, payload.message, payload.transcript, payload.history);
+
+  if (payload.mode === "clips") {
+    const result = await runWithModelFallback(
+      async (model) => {
+        const timeout = Math.max(1_000, Math.min(CLIP_ATTEMPT_TIMEOUT_MS, deadline - Date.now()));
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeout);
+        try {
+          const ai = getGeminiClient();
+          const response = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: {
+              systemInstruction: ASSISTANT_SYSTEM_PROMPT,
+              temperature: GEMINI.temperature.clips,
+              maxOutputTokens: GEMINI.maxOutputTokens.clips,
+              responseMimeType: "application/json",
+              responseJsonSchema: CLIP_PLAN_SCHEMA,
+              abortSignal: controller.signal,
+            },
+          });
+          // A plan we cannot read counts as this model's failure, so the next
+          // model (or Groq) still gets a chance within the same click.
+          return parseClipPlan(response.text ?? "");
+        } finally {
+          clearTimeout(timer);
+        }
+      },
+      { candidates, deadline, maxAttempts: 6 },
+    );
+    if (!result.ok) return { ok: false, kind: result.failure.kind, emittedText: false };
+    emitPlan(emit, result.value, result.model, "gemini", note);
+    return { ok: true };
+  }
+
+  let emittedText = false;
+  const result = await runWithModelFallback(
+    async (model) => {
+      const controller = new AbortController();
+      const firstTokenBudget = Math.max(1_000, Math.min(FIRST_TOKEN_TIMEOUT_MS, deadline - Date.now()));
+      let timer = setTimeout(() => controller.abort(), firstTokenBudget);
+      try {
+        const ai = getGeminiClient();
+        const stream = await ai.models.generateContentStream({
+          model,
+          contents: prompt,
+          config: {
+            systemInstruction: ASSISTANT_SYSTEM_PROMPT,
+            temperature: payload.mode === "summary" ? GEMINI.temperature.summary : GEMINI.temperature.chat,
+            maxOutputTokens:
+              payload.mode === "summary" ? GEMINI.maxOutputTokens.summary : GEMINI.maxOutputTokens.chat,
+            abortSignal: controller.signal,
+          },
+        });
+        for await (const chunk of stream) {
+          const text = (chunk.text ?? "").toString();
+          if (!text) continue;
+          if (!emittedText) {
+            emit({ type: "meta", model, provider: "gemini", ...(note ? { note } : {}) });
+            // The answer has started: now only the whole-route budget applies.
+            clearTimeout(timer);
+            timer = setTimeout(() => controller.abort(), Math.max(1_000, deadline + BACKUP_RESERVE_MS - Date.now()));
+          }
+          emittedText = true;
+          emit({ type: "delta", text });
+        }
+        if (!emittedText) throw new Error("empty response");
+        return true;
+      } catch (error) {
+        // After text has reached the reader a retry would duplicate the answer:
+        // surface it as a non-retryable failure so the fallback loop stops.
+        if (emittedText) throw new StreamInterrupted(error);
+        throw error;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    { candidates, deadline, maxAttempts: 6 },
+  );
+  if (!result.ok) return { ok: false, kind: result.failure.kind, emittedText };
+  return { ok: true };
+}
+
+class StreamInterrupted extends Error {
+  constructor(readonly original: unknown) {
+    super("stream interrupted after text");
+    this.name = "StreamInterrupted";
   }
 }
 
-async function produceStream(
+/* ───────────────────────────────── Groq ───────────────────────────────── */
+
+async function runGroq(
   payload: ChatRequest,
   emit: (event: ChatStreamEvent) => void,
-): Promise<void> {
-  const prompt = buildUserPrompt(payload.mode, payload.message, payload.transcript, payload.history);
-  const queue = modelCandidates();
-  const attempts: Array<{ model: string; failure: GeminiFailure }> = [];
-  const retriedTemporarily = new Set<string>();
-  const maxAttempts = 4;
+  deadline: number,
+  note?: string,
+): Promise<ProviderOutcome> {
+  const available = await listGroqModels();
+  const clips = payload.mode === "clips";
+  const outputTokens = clips ? 3_400 : payload.mode === "summary" ? 900 : 1_600;
+  const compact = clips || payload.mode === "chapters";
+
+  let prompt = buildUserPrompt(payload.mode, payload.message, payload.transcript, payload.history, { compact });
+  const systemTokens = estimateTokens(ASSISTANT_SYSTEM_PROMPT);
+  let models = planGroqModels(estimateTokens(prompt) + systemTokens, outputTokens, available);
+  let trimNote: string | undefined;
+  if (models.length === 0) {
+    // Too long for any free Groq model: read as much as fits, and say so.
+    const overhead = prompt.length - contextLength(payload, compact);
+    const budget = groqPromptBudgetCharacters(outputTokens + systemTokens, available) - Math.max(0, overhead);
+    if (budget < 2_000) return { ok: false, kind: "too-large", emittedText: false };
+    prompt = buildUserPrompt(payload.mode, payload.message, payload.transcript, payload.history, {
+      compact,
+      maxCharacters: budget,
+    });
+    const share = Math.max(1, Math.min(99, Math.round((budget / Math.max(1, contextLength(payload, compact))) * 100)));
+    trimNote = `Groq's free tier read about the first ${share}% of this transcript.`;
+    models = planGroqModels(estimateTokens(prompt) + systemTokens, outputTokens, available);
+    if (models.length === 0) return { ok: false, kind: "too-large", emittedText: false };
+  }
+  const hint = sanitizeModelId(payload.preferredModels?.groq);
+  if (hint && models.includes(hint)) models = [hint, ...models.filter((model) => model !== hint)];
+  const fullNote = [note, trimNote].filter(Boolean).join(" ") || undefined;
+
+  let lastKind = "unknown";
   let emittedText = false;
-
-  // Streaming cannot use the generic fallback helper because it must not switch
-  // models after any text has reached the browser. It still gets the same hard
-  // ceiling and one same-model retry for a transient 503.
-  while (queue.length > 0 && attempts.length < maxAttempts) {
-    const model = queue.shift() as string;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), GEMINI_REQUEST_TIMEOUT_MS);
+  for (const model of models.slice(0, 3)) {
+    const remaining = deadline - Date.now();
+    if (remaining < 2_500) break;
+    const signal = AbortSignal.timeout(Math.min(GROQ_ATTEMPT_TIMEOUT_MS, remaining));
     try {
-      const ai = getGeminiClient();
-      const stream = await ai.models.generateContentStream({
+      const request = {
         model,
-        contents: prompt,
-        config: {
-          systemInstruction: ASSISTANT_SYSTEM_PROMPT,
-          temperature:
-            payload.mode === "summary" ? GEMINI.temperature.summary : GEMINI.temperature.chat,
-          maxOutputTokens:
-            payload.mode === "summary" ? GEMINI.maxOutputTokens.summary : GEMINI.maxOutputTokens.chat,
-          abortSignal: controller.signal,
-        },
-      });
-
-      let modelAnnounced = false;
-      for await (const chunk of stream) {
-        const text = (chunk.text ?? "").toString();
-        if (!text) continue;
-        if (!modelAnnounced) {
-          emit({ type: "meta", model });
-          modelAnnounced = true;
-        }
+        system: ASSISTANT_SYSTEM_PROMPT,
+        prompt,
+        temperature: clips ? GEMINI.temperature.clips : payload.mode === "summary" ? GEMINI.temperature.summary : GEMINI.temperature.chat,
+        maxTokens: outputTokens,
+        json: clips,
+        signal,
+      };
+      if (clips) {
+        const text = await groqComplete(request);
+        const plan = parseClipPlan(text);
+        emitPlan(emit, plan, model, "groq", fullNote);
+        return { ok: true };
+      }
+      for await (const text of groqStream(request)) {
+        if (!emittedText) emit({ type: "meta", model, provider: "groq", ...(fullNote ? { note: fullNote } : {}) });
         emittedText = true;
         emit({ type: "delta", text });
       }
-
-      rememberGeminiModel(model);
-      if (!modelAnnounced) emit({ type: "meta", model });
-      return;
+      if (emittedText) return { ok: true };
+      lastKind = "unknown";
     } catch (error) {
+      if (emittedText) return { ok: false, kind: "interrupted", emittedText: true };
+      if (error instanceof GroqError) {
+        lastKind = error.kind === "too-large" ? "quota" : error.kind;
+        if (error.kind === "invalid-key") break;
+        continue;
+      }
       const failure = classifyGeminiError(error);
-      attempts.push({ model, failure });
-      // Retrying after text has reached the client would duplicate the answer.
-      // Before the first delta, a 503 gets one same-model retry and then the
-      // remaining queue supplies a bounded fallback.
-      if (
-        (failure.kind === "temporarily-unavailable" || failure.kind === "timeout") &&
-        !emittedText
-      ) {
-        if (!retriedTemporarily.has(model) && attempts.length < maxAttempts) {
-          retriedTemporarily.add(model);
-          await delay(350);
-          queue.unshift(model);
-        }
-        continue;
-      }
-      if (failure.kind === "model-unavailable" && !emittedText) {
-        markGeminiModelUnavailable(model);
-        const recommendation =
-          extractRecommendedModel(error instanceof Error ? error.message : String(error)) ??
-          failure.message.match(/"([\w.\-]+)"/)?.[1];
-        queueSuggestion(queue, recommendation);
-        continue;
-      }
-      throw error;
-    } finally {
-      clearTimeout(timer);
+      lastKind = failure.kind === "unknown" && error instanceof Error && /no usable clip plan/i.test(error.message)
+        ? "invalid-response"
+        : failure.kind;
     }
   }
+  return { ok: false, kind: lastKind, emittedText };
+}
 
-  const last = attempts.at(-1)?.failure;
-  if (last) emit({ type: "error", code: last.kind, message: userFacingFailure(last) });
-  else emit({ type: "error", code: "model-unavailable", message: "No Gemini model is available to this account." });
+function contextLength(payload: ChatRequest, compact: boolean): number {
+  const timed = payload.mode === "clips" || payload.mode === "chapters";
+  if (timed && payload.transcript.segments.length) {
+    return payload.transcript.segments.reduce(
+      (total, segment) => total + segment.x.length + (compact ? 8 : 30),
+      0,
+    );
+  }
+  return payload.transcript.text.length;
+}
+
+function emitPlan(
+  emit: (event: ChatStreamEvent) => void,
+  plan: ClipPlan,
+  model: string,
+  provider: AiProviderId,
+  note?: string,
+) {
+  emit({ type: "meta", model, provider, ...(note ? { note } : {}) });
+  emit({ type: "clips", plan });
+  if (plan.summary) emit({ type: "delta", text: plan.summary });
+}
+
+/* ─────────────────────────────── Failures ─────────────────────────────── */
+
+/**
+ * What the reader sees when nothing answered. Deliberately free of model
+ * names, env-var instructions for the wrong audience, and provider JSON.
+ */
+const FAILURE_TEXT: Record<string, string> = {
+  "missing-key":
+    "NexAI isn't set up on this installation yet. Add GEMINI_API_KEY or GROQ_API_KEY to the app environment, then restart.",
+  "invalid-key":
+    "The AI key on this installation was rejected. Check GEMINI_API_KEY / GROQ_API_KEY in the app environment.",
+  quota: "The free AI limits are used up for the moment. Wait about a minute, then retry.",
+  blocked: "The AI declined this request. Try rephrasing it.",
+  network: "NexAI couldn't reach the AI service from this server. Check the connection, then retry.",
+  "invalid-response": "The AI's clip list came back unreadable. Retry — it usually works on the next try.",
+  interrupted: "The answer was cut off. Retry to get the full answer.",
+  unknown: "NexAI couldn't get an answer right now. Retry in a moment.",
+};
+
+function failureCode(kinds: string[]): string {
+  if (kinds.includes("interrupted")) return "interrupted";
+  if (kinds.length && kinds.every((kind) => kind === "invalid-key")) return "invalid-key";
+  if (kinds.includes("blocked")) return "blocked";
+  if (kinds.length && kinds.every((kind) => kind === "quota")) return "quota";
+  if (kinds.includes("invalid-response")) return "invalid-response";
+  if (kinds.length && kinds.every((kind) => kind === "network")) return "network";
+  return kinds.at(-1) === "invalid-key" ? "invalid-key" : "unknown";
+}
+
+function failureText(kinds: string[]): string {
+  return FAILURE_TEXT[failureCode(kinds)] ?? FAILURE_TEXT.unknown;
 }
 
 function validateRequest(value: unknown): ChatRequest | null {
@@ -236,11 +410,26 @@ function validateRequest(value: unknown): ChatRequest | null {
   if (!transcript) return null;
 
   const history = normalizeHistory(raw.history);
+  const provider =
+    typeof raw.provider === "string" && PROVIDERS.has(raw.provider as AiProviderChoice)
+      ? (raw.provider as AiProviderChoice)
+      : "auto";
+  const hints =
+    raw.preferredModels && typeof raw.preferredModels === "object"
+      ? (raw.preferredModels as Record<string, unknown>)
+      : {};
+  const preferredModels: Partial<Record<AiProviderId, string>> = {};
+  const geminiHint = sanitizeModelId(hints.gemini);
+  const groqHint = sanitizeModelId(hints.groq);
+  if (geminiHint) preferredModels.gemini = geminiHint;
+  if (groqHint) preferredModels.groq = groqHint;
   return {
     mode: mode as ChatMode,
     message: message.trim().slice(0, MAX_MESSAGE),
     transcript,
     history,
+    provider,
+    preferredModels,
   };
 }
 
@@ -289,10 +478,6 @@ function normalizeHistory(value: unknown): ChatHistoryEntry[] {
   return result;
 }
 
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
 function invalidBody(message: string): Response {
   return Response.json({ error: "invalid-body", message }, { status: 400 });
 }
@@ -300,8 +485,4 @@ function invalidBody(message: string): Response {
 function finiteNumber(value: unknown): number | null {
   const number = typeof value === "number" ? value : Number(value);
   return Number.isFinite(number) ? number : null;
-}
-
-function userFacingFailure(failure: GeminiFailure): string {
-  return failure.remedy ? `${failure.message} ${failure.remedy}` : failure.message;
 }

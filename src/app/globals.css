@@ -947,3 +947,256 @@
   -webkit-user-drag: none;
   user-select: none;
 }
+
+/* ───────────────────────── 9. Cinema (theater) mode ────────────────────────
+   The page stops scrolling and the studio fills the space between the header
+   and the credits. `.cinema-stage` is a size container, so the player is sized
+   from the real space available — it can never be taller than the window, and
+   the footer can never sit on top of it. `--cinema-p` (0 → 1, written by
+   useCinemaShrink) moves the player between its theater size and its compact
+   size as the reader scrolls the transcript. */
+html[data-theater] {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html[data-theater] body {
+  overflow: hidden;
+}
+html[data-theater] .app-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+html[data-theater] [data-landing] {
+  display: none;
+}
+
+@layer components {
+  .cinema-stage {
+    container-type: size;
+    container-name: cinema;
+    --cinema-p: 0;
+    /* Transport + title bar under the video, and the gap to the transcript. */
+    --cinema-chrome: 8.75rem;
+    /* The transcript always keeps at least this much room at full size. */
+    --cinema-peek: clamp(8rem, 28cqh, 15rem);
+  }
+
+  .cinema-player {
+    --cinema-max: max(
+      5.5rem,
+      min(45rem, calc(100cqh - var(--cinema-chrome) - var(--cinema-peek)))
+    );
+    --cinema-min: min(var(--cinema-max), max(7rem, 24cqh));
+    /* A plain lerp. (Chromium drops the `max - (max - min) * p` spelling as
+       invalid at exactly p = 1, which collapsed the player to 0px.) */
+    --cinema-h: calc(
+      var(--cinema-max) * (1 - var(--cinema-p)) + var(--cinema-min) * var(--cinema-p)
+    );
+    flex: none;
+    width: min(100%, calc(var(--cinema-h) * 16 / 9));
+    max-width: 100%;
+    transition: width 110ms linear;
+  }
+  .cinema-stage[data-cinema-animate] .cinema-player {
+    transition: width 380ms var(--ease-liquid);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cinema-player,
+    .cinema-stage[data-cinema-animate] .cinema-player {
+      transition: none;
+    }
+  }
+}
+
+/* ─────────────────────────────── 10. NexAI ─────────────────────────────────
+   The assistant's own visual language: the familiar blue → violet → rose "AI"
+   gradient for the mark and the one primary action, layered over each theme's
+   own surfaces so it still belongs to Zen, OLED, Glass and Cyberpunk. */
+@layer components {
+  .nexai-header {
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, #9b6bff 7%, transparent),
+      transparent
+    );
+  }
+  .nexai-badge,
+  .nexai-avatar {
+    background:
+      radial-gradient(circle at 30% 20%, rgb(155 107 255 / 0.22), transparent 62%),
+      linear-gradient(135deg, rgb(76 141 255 / 0.13), rgb(255 111 163 / 0.13));
+    border: 1px solid color-mix(in oklab, #9b6bff 32%, var(--line));
+  }
+  .nexai-badge {
+    box-shadow: 0 8px 22px -12px rgb(155 107 255 / 0.7);
+  }
+  .nexai-mark--live {
+    animation: nexai-pulse 1.8s var(--ease-liquid) infinite;
+    transform-origin: 50% 50%;
+  }
+
+  .nexai-hero {
+    border: 1px solid color-mix(in oklab, #9b6bff 26%, var(--line));
+    background:
+      radial-gradient(120% 90% at 100% 0%, rgb(155 107 255 / 0.17), transparent 56%),
+      radial-gradient(90% 80% at 0% 100%, color-mix(in oklab, var(--accent) 15%, transparent), transparent 62%),
+      var(--surface);
+  }
+  .nexai-cta,
+  .nexai-cta-chip,
+  .viral-cta {
+    color: #fff;
+    background: linear-gradient(110deg, #3f7bff, #8b5cff 48%, #f0609b 100%);
+    background-size: 180% 100%;
+    background-position: 0% 50%;
+    transition:
+      background-position 500ms var(--ease-liquid),
+      transform 160ms var(--ease-liquid),
+      box-shadow 200ms var(--ease-liquid);
+  }
+  .nexai-cta {
+    box-shadow: 0 10px 26px -14px rgb(139 92 255 / 0.9);
+  }
+  .nexai-cta:hover:not(:disabled),
+  .nexai-cta-chip:hover:not(:disabled),
+  .viral-cta:hover:not(:disabled) {
+    background-position: 100% 50%;
+    box-shadow: 0 12px 30px -12px rgb(139 92 255 / 0.85);
+  }
+  .nexai-cta:active:not(:disabled),
+  .viral-cta:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+  .nexai-cta .nexai-mark path,
+  .viral-cta .nexai-mark path {
+    fill: #fff;
+  }
+  .nexai-cta .nexai-mark circle,
+  .viral-cta .nexai-mark circle {
+    display: none;
+  }
+
+  .nexai-tile:hover {
+    background: color-mix(in oklab, var(--accent) 6%, var(--surface));
+  }
+
+  .nexai-thinking,
+  .nexai-scan,
+  .nexai-clips-head {
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .nexai-scan {
+    background:
+      radial-gradient(100% 80% at 100% 0%, rgb(155 107 255 / 0.1), transparent 60%),
+      var(--surface);
+  }
+  .nexai-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #4c8dff, #ff6fa3);
+    animation: nexai-dot 1.1s ease-in-out infinite;
+  }
+  .nexai-dot:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .nexai-dot:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  .nexai-clip {
+    background: linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--clip-hex) 9%, var(--surface)),
+      var(--surface) 62%
+    );
+    transition:
+      border-color 200ms var(--ease-liquid),
+      box-shadow 200ms var(--ease-liquid),
+      transform 200ms var(--ease-liquid);
+  }
+  .nexai-clip:hover,
+  .nexai-clip.is-armed {
+    border-color: color-mix(in oklab, var(--clip-hex) 48%, var(--line));
+    box-shadow: 0 14px 34px -22px var(--clip-hex);
+  }
+  .nexai-clip[data-playing="true"] {
+    animation: clip-breathe 2.4s ease-in-out infinite;
+  }
+  .nexai-clip-edge {
+    background: var(--clip-hex);
+    opacity: 0.85;
+  }
+  .nexai-rank {
+    background: color-mix(in oklab, var(--clip-hex) 17%, transparent);
+    color: color-mix(in oklab, var(--clip-hex) 62%, var(--ink));
+    border: 1px solid color-mix(in oklab, var(--clip-hex) 30%, transparent);
+  }
+  .nexai-ring {
+    background: conic-gradient(
+      var(--ring-hex) var(--ring-value),
+      color-mix(in oklab, var(--ink) 10%, transparent) 0
+    );
+  }
+  .nexai-ring::before {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    border-radius: inherit;
+    background: var(--surface);
+  }
+  .nexai-hookline {
+    background: color-mix(in oklab, var(--clip-hex) 8%, transparent);
+    border-left: 2px solid var(--clip-hex);
+  }
+  .nexai-play {
+    background: color-mix(in oklab, var(--clip-hex) 16%, var(--surface));
+    border: 1px solid color-mix(in oklab, var(--clip-hex) 42%, var(--line));
+    color: var(--ink);
+  }
+  .nexai-play.is-armed {
+    background: var(--clip-hex);
+    border-color: var(--clip-hex);
+    color: #fff;
+  }
+
+  /* The transcript's own "find clips" bar. */
+  .viral-cta-bar {
+    background: linear-gradient(
+      180deg,
+      transparent,
+      color-mix(in oklab, #9b6bff 6%, transparent)
+    );
+  }
+}
+
+@keyframes nexai-pulse {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(45deg) scale(0.86);
+  }
+}
+@keyframes nexai-dot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nexai-mark--live,
+  .nexai-dot,
+  .nexai-clip[data-playing="true"] {
+    animation: none;
+  }
+}

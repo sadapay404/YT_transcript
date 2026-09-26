@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Activity, PanelRight } from "lucide-react";
+import { Activity } from "lucide-react";
 
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
+import { NexAIMark } from "@/components/assistant/AiLogos";
 import { StylePanel } from "@/components/layout/StylePanel";
 import { TranStudioMark } from "@/components/layout/TranStudioLogo";
 import { ViewModeSwitch } from "@/components/layout/ViewModeSwitch";
@@ -72,10 +73,13 @@ export function StudioHeader() {
             type="button"
             onClick={toggleSidebar}
             aria-pressed={sidebarOpen}
-            title="Assistant panel"
-            className="btn btn-icon h-9 w-9 border border-line"
+            title="NexAI — find viral clips and ask about the video"
+            aria-label="NexAI assistant"
+            data-nexai-toggle
+            className="btn h-9 gap-1.5 border border-line px-2 sm:px-2.5"
           >
-            <PanelRight className="h-4 w-4" />
+            <NexAIMark className="h-4 w-4" />
+            <span className="hidden text-[12px] font-semibold sm:inline">NexAI</span>
           </button>
 
         </div>

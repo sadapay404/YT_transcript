@@ -20,6 +20,7 @@ import type { TranscriptSegment, ViralClip } from "@/lib/types";
 import { cn, formatDuration, readingMinutes } from "@/lib/utils";
 import { TranscriptLine } from "@/components/workspace/TranscriptLine";
 import { ExportMenu } from "@/components/export/ExportMenu";
+import { ViralClipsBar } from "@/components/workspace/ViralClipsBar";
 import { useFollowAlong } from "@/hooks/useFollowAlong";
 import { usePlaybackStore } from "@/stores/usePlaybackStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
@@ -202,6 +203,9 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* ── NexAI's main job, one click away ─────────────────────────────── */}
+      {segments.length > 0 && <ViralClipsBar />}
     </section>
   );
 }

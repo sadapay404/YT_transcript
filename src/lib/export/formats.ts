@@ -268,7 +268,7 @@ function formatTimestamp(seconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
 }
 
-function formatSrtTime(seconds: number): string {
+export function formatSrtTime(seconds: number): string {
   return formatLongTime(seconds, ",");
 }
 
@@ -298,11 +298,11 @@ function formatDuration(seconds: number): string {
     : `${minutes}:${String(rest).padStart(2, "0")}`;
 }
 
-function roundTime(value: number): number {
+export function roundTime(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
-function csvCell(value: string): string {
+export function csvCell(value: string): string {
   return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 

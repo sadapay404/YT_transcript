@@ -134,6 +134,12 @@ export interface ChatMessage {
   retryable?: boolean;
   /** Model that produced the turn (for the "which model answered" footer). */
   model?: string;
+  /** Provider that produced the turn. */
+  provider?: AiProviderId;
+  /** Routing note shown quietly under the answer. */
+  note?: string;
+  /** Mode the turn was asked in (clips turns render the clip studio). */
+  mode?: ChatMode;
   /** Seconds the model spent (nice for the token-efficiency readout). */
   latencyMs?: number;
 }
@@ -150,6 +156,20 @@ export interface ChatRequest {
   /** Compact transcript payload: flat text + segments (only what the mode needs). */
   transcript: ChatTranscriptContext;
   history: ChatHistoryEntry[];
+  /** Which AI answers: "auto" (Gemini, then Groq) or a manual choice. */
+  provider?: AiProviderChoice;
+  /** Models that answered for this browser before — tried first, if still valid. */
+  preferredModels?: Partial<Record<AiProviderId, string>>;
+}
+
+/** The free AI providers NexAI can use. */
+export type AiProviderId = "gemini" | "groq";
+export type AiProviderChoice = "auto" | AiProviderId;
+
+/** GET /api/chat — which providers this installation has keys for. */
+export interface AiProviderStatus {
+  gemini: boolean;
+  groq: boolean;
 }
 
 /** The transcript context injected into every Gemini call. */
@@ -166,7 +186,13 @@ export interface ChatTranscriptContext {
 
 export type ChatStreamEvent =
   | { type: "delta"; text: string }
-  | { type: "meta"; model: string }
+  | {
+      type: "meta";
+      model: string;
+      provider?: AiProviderId;
+      /** A short, honest note, e.g. "Groq was busy — answered by Gemini". */
+      note?: string;
+    }
   | { type: "clips"; plan: ClipPlan }
   | { type: "error"; message: string; code?: string }
   | { type: "done" };
@@ -184,6 +210,12 @@ export interface RawClip {
   /** Optional extras — the schema allows them, the UI treats them as bonuses. */
   hook_type?: HookType | string;
   reason?: string;
+  /** The first line the viewer hears — the hook, verbatim or near-verbatim. */
+  hook_line?: string;
+  /** A ready-to-post caption for Shorts / Reels / TikTok. */
+  caption?: string;
+  /** 3–6 hashtags, each starting with "#". */
+  hashtags?: string[];
 }
 
 export interface ClipPlan {

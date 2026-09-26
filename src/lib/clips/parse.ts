@@ -146,6 +146,7 @@ function normalizeClip(value: unknown): RawClip | null {
 
   const score = asNumber(object.viral_score);
   const hook = asString(object.hook_type, 40)?.toLowerCase();
+  const hashtags = normalizeHashtags(object.hashtags);
   return {
     title,
     start_time: start,
@@ -154,7 +155,24 @@ function normalizeClip(value: unknown): RawClip | null {
     viral_score: clamp(score ?? 0, 0, 100),
     ...(hook ? { hook_type: HOOK_TYPES.has(hook as HookType) ? hook : "other" } : {}),
     ...(asString(object.reason, 600) ? { reason: asString(object.reason, 600) } : {}),
+    ...(asString(object.hook_line, 300) ? { hook_line: asString(object.hook_line, 300) } : {}),
+    ...(asString(object.caption, 600) ? { caption: asString(object.caption, 600) } : {}),
+    ...(hashtags.length ? { hashtags } : {}),
   };
+}
+
+/** Accept ["#a", "b"] or "#a #b" and return up to six clean "#tags". */
+function normalizeHashtags(value: unknown): string[] {
+  const raw = Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : typeof value === "string"
+      ? value.split(/[\s,]+/)
+      : [];
+  const tags = raw
+    .map((tag) => tag.trim().replace(/^#+/, "").replace(/[^\p{L}\p{N}_]/gu, ""))
+    .filter((tag) => tag.length > 0 && tag.length <= 40)
+    .map((tag) => `#${tag}`);
+  return [...new Set(tags)].slice(0, 6);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

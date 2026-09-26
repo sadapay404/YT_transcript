@@ -41,6 +41,34 @@ export function getConfiguredGeminiModel(): string {
 let discoveredModel: string | null = null;
 /** A model stays in the candidate list, but moves behind the working model after a refusal. */
 const refusedModels = new Set<string>();
+/**
+ * Free-tier quotas are per model, so a 429 on one model says little about the
+ * next one. A model that just hit its quota cools down behind the others for a
+ * minute instead of being retried first on every request.
+ */
+const coolingModels = new Map<string, number>();
+const QUOTA_COOLDOWN_MS = 60_000;
+
+function isCooling(model: string): boolean {
+  const until = coolingModels.get(model);
+  if (until === undefined) return false;
+  if (until > Date.now()) return true;
+  coolingModels.delete(model);
+  return false;
+}
+
+/** Record a per-model quota hit (429). */
+export function markGeminiModelCooling(model: string): void {
+  const normalized = model.trim();
+  if (normalized) coolingModels.set(normalized, Date.now() + QUOTA_COOLDOWN_MS);
+}
+
+/** Valid-looking model id from an untrusted client hint, or null. */
+export function sanitizeModelId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const model = value.trim().replace(/^models\//, "");
+  return /^[a-z0-9][\w.\-/]{1,79}$/i.test(model) ? model : null;
+}
 
 /** Remember a model that completed a request, including streaming requests. */
 export function rememberGeminiModel(model: string): void {
@@ -48,6 +76,7 @@ export function rememberGeminiModel(model: string): void {
   if (!normalized) return;
   discoveredModel = normalized;
   refusedModels.delete(normalized);
+  coolingModels.delete(normalized);
 }
 
 /** Record only a model-level refusal; quota and transport failures never call this. */
@@ -81,6 +110,7 @@ export function getDiscoveredGeminiModel(): string | null {
 export function resetDiscoveredGeminiModel(): void {
   discoveredModel = null;
   refusedModels.clear();
+  coolingModels.clear();
 }
 
 export function getGeminiFallbackModel(): string {
@@ -112,31 +142,52 @@ export function extractRecommendedModel(message: string): string | null {
  * explicit pin is deliberately retained later in the list rather than erased,
  * so changing the account or model availability can recover without a restart.
  */
-export function modelCandidates(): string[] {
+export function modelCandidates(
+  options: {
+    /** Models that recently answered for this visitor (client hint), best first. */
+    preferred?: Array<string | null | undefined>;
+    /** Models this key can actually call, from ListModels, best first. */
+    discovered?: string[];
+  } = {},
+): string[] {
   const explicit = process.env.GEMINI_MODEL?.trim() || null;
   const configured = getConfiguredGeminiModel();
   const staticCandidates = [
+    ...(options.discovered ?? []),
     configured,
     // The lite model is the intentional high-demand backstop; speculative
     // model names stay behind it and are only useful after a model-level 404.
     getGeminiFallbackModel(),
     ...GEMINI.modelFallbacks,
   ];
+  const preferred = (options.preferred ?? [])
+    .map((model) => sanitizeModelId(model))
+    .filter((model): model is string => Boolean(model) && !refusedModels.has(model as string));
+  // A pin that the live model list doesn't contain (an old `.env` value) is
+  // kept as a later fallback instead of burning the first attempt every time.
+  const pinLeads = Boolean(
+    explicit &&
+      !refusedModels.has(explicit) &&
+      (!options.discovered?.length || options.discovered.includes(explicit)),
+  );
+  // After that: the model that last answered in this process.
   const first =
-    explicit && !refusedModels.has(explicit)
-      ? explicit
-      : !explicit && discoveredModel && !refusedModels.has(discoveredModel)
-        ? discoveredModel
-        : explicit &&
-            refusedModels.has(explicit) &&
-            discoveredModel &&
-            !refusedModels.has(discoveredModel)
-          ? discoveredModel
-          : configured && !refusedModels.has(configured)
-            ? configured
-            : getGeminiFallbackModel();
+    discoveredModel && !refusedModels.has(discoveredModel) ? discoveredModel : null;
 
-  return [...new Set([first, ...staticCandidates].filter(Boolean))];
+  const ordered = [
+    ...new Set(
+      [
+        ...(pinLeads && explicit ? [explicit] : []),
+        ...preferred,
+        first,
+        ...staticCandidates,
+      ].filter((model): model is string => Boolean(model)),
+    ),
+  ];
+  // Refused and quota-cooling models keep their place in line, just at the back.
+  const healthy = ordered.filter((model) => !refusedModels.has(model) && !isCooling(model));
+  const later = ordered.filter((model) => !healthy.includes(model));
+  return [...healthy, ...later];
 }
 
 /** Put Google's suggested replacement at the front of a pending model queue. */
@@ -254,16 +305,13 @@ export function classifyGeminiError(error: unknown): GeminiFailure {
     text.includes("no longer available") ||
     text.includes("unsupported model")
   ) {
-    const recommended = extractRecommendedModel(raw);
+    // Model names never reach the reader: the app rotates to a model this key
+    // can use on its own, so this is only an internal routing signal.
     return {
       kind: "model-unavailable",
-      message: recommended
-        ? `That model isn't available to this account. Google suggests "${recommended}".`
-        : "That model isn't available to this account.",
-      remedy: recommended
-        ? `Set GEMINI_MODEL=${recommended} for a permanent fix, or just retry — the app switches automatically and remembers what worked.`
-        : "Set GEMINI_MODEL to a model your account can use (aistudio.google.com has the list).",
-      retryable: false,
+      message: "That Gemini model isn't available to this key.",
+      remedy: "The app switches to an available model automatically.",
+      retryable: true,
     };
   }
   // Google uses 503 UNAVAILABLE for short demand spikes. Treat it as a
@@ -372,6 +420,8 @@ export async function runWithModelFallback<T>(
     maxAttempts?: number;
     /** Delay before retrying a temporary 503 on the same model. */
     transientRetryDelayMs?: number;
+    /** Epoch ms after which no new attempt starts (keeps inside the route budget). */
+    deadline?: number;
   } = {},
 ): Promise<ModelRunResult<T>> {
   // De-duplicate defensively: the caller's list comes from env vars and a
@@ -382,7 +432,10 @@ export async function runWithModelFallback<T>(
     ...new Set((options.candidates ?? modelCandidates()).filter(Boolean)),
   ];
   const attempts: ModelAttempt[] = [];
-  const maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? 4));
+  // Model refusals and per-model quota answers come back in well under a
+  // second, so a few more of those are cheap; the deadline bounds the rest.
+  const maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? 6));
+  let quotaHits = 0;
   const retryDelayMs = Math.max(
     0,
     Math.floor(options.transientRetryDelayMs ?? 350),
@@ -390,6 +443,7 @@ export async function runWithModelFallback<T>(
   const retriedTemporarily = new Set<string>();
 
   while (queue.length > 0 && attempts.length < maxAttempts) {
+    if (options.deadline !== undefined && Date.now() >= options.deadline) break;
     const model = queue.shift() as string;
     try {
       const value = await call(model);
@@ -420,6 +474,15 @@ export async function runWithModelFallback<T>(
           await wait(retryDelayMs);
           queue.unshift(model);
         }
+        continue;
+      }
+
+      if (failure.kind === "quota") {
+        // Quotas are per model on the free tier: cool this one down and try the
+        // next — but only twice, so a project-wide limit cannot burn the list.
+        markGeminiModelCooling(model);
+        quotaHits += 1;
+        if (quotaHits >= 2) return { ok: false, failure, model, attempts };
         continue;
       }
 
