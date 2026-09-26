@@ -21,6 +21,7 @@ import {
   isGeminiConfigured,
   probeGemini,
 } from "@/lib/gemini/client";
+import { isGroqConfigured } from "@/lib/ai/groq";
 import { probeTranscript } from "@/lib/youtube/probe";
 import { normalizeSegments } from "@/lib/youtube/normalize";
 import { parseYouTubeUrl } from "@/lib/utils";
@@ -189,6 +190,25 @@ function configCheck(): HealthCheck {
       ...(deployment.commitRef ? { deployedRef: deployment.commitRef } : {}),
       ...(deployment.commitSha ? { deployedSha: deployment.commitSha } : {}),
     },
+  };
+}
+
+/** Optional free backup provider — never a failure when it is absent. */
+function groqConfigCheck(): HealthCheck {
+  const configured = isGroqConfigured();
+  return {
+    id: "groq-key",
+    label: "Groq backup (optional)",
+    status: configured ? "pass" : "skipped",
+    detail: configured
+      ? "Configured — NexAI falls back to Groq when Gemini is busy or unavailable."
+      : "GROQ_API_KEY is not set — NexAI uses Gemini only.",
+    ...(configured
+      ? {}
+      : {
+          hint:
+            "Optional: add GROQ_API_KEY (free, no card) where GEMINI_API_KEY lives, then redeploy/restart.",
+        }),
   };
 }
 
@@ -389,7 +409,12 @@ export async function buildHealthReport(
   const deep = options.deep ?? false;
   const video = options.video?.trim() || HEALTH_PROBE_VIDEO;
 
-  const checks: HealthCheck[] = [appShellCheck(), configCheck(), normalizerCheck()];
+  const checks: HealthCheck[] = [
+    appShellCheck(),
+    configCheck(),
+    groqConfigCheck(),
+    normalizerCheck(),
+  ];
 
   if (deep) {
     // Run both network probes concurrently — they are independent and slow.
