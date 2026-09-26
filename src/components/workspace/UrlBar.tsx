@@ -21,6 +21,9 @@ export function UrlBar({ autoFocus = false }: { autoFocus?: boolean }) {
   const setValue = useTranscriptStore((s) => s.setInput);
   const extract = useTranscriptStore((s) => s.extract);
   const loadDemo = useTranscriptStore((s) => s.loadDemo);
+  /** Pasting needs no network at all, so it is offered up front rather than
+   *  only after a fetch fails — it is the one path that always works. */
+  const openPaste = useTranscriptStore((s) => s.openPaste);
 
   const [touched, setTouched] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -199,6 +202,17 @@ export function UrlBar({ autoFocus = false }: { autoFocus?: boolean }) {
         >
           <Sparkles className="h-3 w-3" />
           or read the demo transcript
+        </button>
+
+        <span className="text-ink-faint/50">·</span>
+
+        <button
+          type="button"
+          onClick={openPaste}
+          className="inline-flex items-center gap-1 text-[11.5px] text-ink-faint underline decoration-dotted transition-colors hover:text-ink-soft"
+        >
+          <ClipboardPaste className="h-3 w-3" />
+          already have a transcript? paste it
         </button>
       </div>
     </form>

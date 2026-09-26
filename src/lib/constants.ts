@@ -362,9 +362,20 @@ export const EXPORT_PRESETS: ExportPreset[] = [
 /* ─────────────────────────────── Gemini ─────────────────────────────────── */
 
 export const GEMINI = {
-  /** Free tier, 1M-token context, generous daily quota, no credit card. */
+  /**
+   * Preferred model: free tier, 1M-token context, generous daily quota, no
+   * credit card. Kept as the default because it is the one this project is
+   * written for — but Google can retire a model for *new* accounts while it
+   * keeps working for older ones, so nothing here assumes it will answer.
+   */
   defaultModel: "gemini-2.5-flash",
   fallbackModel: "gemini-2.5-flash-lite",
+  /**
+   * Tried in order when Google reports the preferred model as unavailable.
+   * Google's own error message usually names a replacement; that name is
+   * preferred over this list, which is only a backstop.
+   */
+  modelFallbacks: ["gemini-3.8-flash", "gemini-flash-latest"],
   /** Model auto-detected via ListModels is cached this long. */
   modelCacheTtlMs: 10 * 60 * 1000,
   temperature: { chat: 0.7, clips: 0.55, summary: 0.4 },

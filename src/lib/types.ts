@@ -35,6 +35,8 @@ export type TranscriptSource =
   | "youtube-transcript" /* npm scraper (InnerTube, falls back to web page) */
   | "innertube"
   | "web-page"
+  | "browser" /* fetched from the visitor's own connection (CORS permitting) */
+  | "paste" /* pasted from YouTube's transcript panel or a subtitle file */
   | "demo";
 
 /** Everything the app needs to render + export + feed Gemini. */

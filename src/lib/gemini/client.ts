@@ -21,13 +21,79 @@ export function isGeminiConfigured(): boolean {
   return Boolean(process.env.GEMINI_API_KEY?.trim());
 }
 
-/** Resolved model id (env override → default). */
-export function getGeminiModel(): string {
+/**
+ * The model the environment asks for (env override → project default). This is
+ * a *preference*: Google may refuse it for a given account.
+ */
+export function getConfiguredGeminiModel(): string {
   return process.env.GEMINI_MODEL?.trim() || GEMINI.defaultModel;
+}
+
+/**
+ * The model that actually answered most recently.
+ *
+ * Google retires models for new accounts while leaving them working for older
+ * ones (live example: `gemini-2.5-flash` answering 404 — "no longer available
+ * to new users — use models/gemini-3.8-flash"). Rather than failing until
+ * someone edits an env var, the first successful call records the model here
+ * and every later call starts from it.
+ */
+let discoveredModel: string | null = null;
+
+/**
+ * Resolved model id, in precedence order: an explicit GEMINI_MODEL always wins
+ * (so an operator can pin one), then whatever answered last, then the default.
+ * `getConfiguredGeminiModel()` cannot be used here — it always returns a value,
+ * which would make the discovered model unreachable.
+ */
+export function getGeminiModel(): string {
+  return process.env.GEMINI_MODEL?.trim() || discoveredModel || GEMINI.defaultModel;
+}
+
+/** What the last successful call used, if the fallback logic has run. */
+export function getDiscoveredGeminiModel(): string | null {
+  return discoveredModel;
+}
+
+/** Test seam: forget a runtime discovery. */
+export function resetDiscoveredGeminiModel(): void {
+  discoveredModel = null;
 }
 
 export function getGeminiFallbackModel(): string {
   return process.env.GEMINI_FALLBACK_MODEL?.trim() || GEMINI.fallbackModel;
+}
+
+/**
+ * Pull a replacement model name out of Google's error text, e.g.
+ * `…please update your code to use models/gemini-3.8-flash …`.
+ * Google knows which model this account should use; believing it beats
+ * guessing from a hardcoded list.
+ */
+export function extractRecommendedModel(message: string): string | null {
+  const patterns = [
+    /use\s+models\/([\w.\-]+)/i,
+    /use\s+model\s+([\w.\-]+)/i,
+    /models\/([\w.\-]+)\s+instead/i,
+  ];
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match?.[1] && match[1] !== "models") return match[1];
+  }
+  return null;
+}
+
+/**
+ * The models to try, in order: the configured one first (the project targets
+ * it deliberately), then the declared fallbacks, then the lite model.
+ */
+export function modelCandidates(): string[] {
+  const candidates = [
+    getConfiguredGeminiModel(),
+    ...GEMINI.modelFallbacks,
+    getGeminiFallbackModel(),
+  ];
+  return [...new Set(candidates.filter(Boolean))];
 }
 
 /**
@@ -41,7 +107,14 @@ export function getGeminiClient(): GoogleGenAI {
       "GEMINI_API_KEY is not set. Add it to .env.local (local) or your host's environment variables (production).",
     );
   }
-  return new GoogleGenAI({ apiKey });
+
+  // Optional endpoint override: a regional endpoint, a self-hosted gateway, or
+  // a local stub in tests. Unset means Google's default.
+  const baseUrl = process.env.GEMINI_BASE_URL?.trim();
+  return new GoogleGenAI({
+    apiKey,
+    ...(baseUrl ? { httpOptions: { baseUrl } } : {}),
+  });
 }
 
 export class GeminiConfigError extends Error {
@@ -83,7 +156,12 @@ export function classifyGeminiError(error: unknown): GeminiFailure {
   }
 
   const raw = error instanceof Error ? error.message : String(error);
-  const text = raw.toLowerCase();
+  // Keep both the original spelling and a separator-normalised copy, so
+  // `"status":"NOT_FOUND"`, `not-found` and `not_found` match the same rule,
+  // without hiding `api_key_invalid` / `resource_exhausted` from the checks
+  // that still look for those spellings.
+  const lower = raw.toLowerCase();
+  const text = `${lower}\n${lower.replace(/[_-]+/g, " ")}`;
 
   if (text.includes("api key not valid") || text.includes("api_key_invalid") || text.includes("invalid api key")) {
     return {
@@ -101,11 +179,21 @@ export function classifyGeminiError(error: unknown): GeminiFailure {
       retryable: true,
     };
   }
-  if (text.includes("does not exist") || text.includes("not found") || text.includes("unsupported model")) {
+  if (
+    text.includes("does not exist") ||
+    text.includes("not found") ||
+    text.includes("no longer available") ||
+    text.includes("unsupported model")
+  ) {
+    const recommended = extractRecommendedModel(raw);
     return {
       kind: "model-unavailable",
-      message: "That model isn't available to this key.",
-      remedy: "Set GEMINI_MODEL=gemini-2.5-flash in your environment.",
+      message: recommended
+        ? `That model isn't available to this account. Google suggests "${recommended}".`
+        : "That model isn't available to this account.",
+      remedy: recommended
+        ? `Set GEMINI_MODEL=${recommended} for a permanent fix, or just retry — the app switches automatically and remembers what worked.`
+        : "Set GEMINI_MODEL to a model your account can use (aistudio.google.com has the list).",
       retryable: false,
     };
   }
@@ -136,45 +224,165 @@ export function classifyGeminiError(error: unknown): GeminiFailure {
   return { kind: "unknown", message: raw, retryable: true };
 }
 
+/** One attempt in a fallback run. */
+export interface ModelAttempt {
+  model: string;
+  ok: boolean;
+  failure?: GeminiFailure;
+  /** Model Google's error told us to use instead, when it said so. */
+  recommended?: string | null;
+}
+
+export type ModelRunResult<T> =
+  | { ok: true; value: T; model: string; attempts: ModelAttempt[] }
+  | { ok: false; failure: GeminiFailure; model: string; attempts: ModelAttempt[] };
+
+/**
+ * Call the API, rotating models only when the failure is *about the model*.
+ *
+ * A quota error, a bad key or a network blip must not trigger a silent model
+ * change — that would disguise the real problem and burn quota on repeats. A
+ * "model unavailable" answer is the one case where a different name is the fix,
+ * and Google usually names it, so that name is queued ahead of the backstop
+ * list. The winner is remembered for the rest of the process.
+ */
+export async function runWithModelFallback<T>(
+  call: (model: string) => Promise<T>,
+  options: { candidates?: string[] } = {},
+): Promise<ModelRunResult<T>> {
+  // De-duplicate defensively: the caller's list comes from env vars and a
+  // hardcoded backstop, and a repeated name would mean two identical calls —
+  // wasted quota against a free tier.
+  const queue = [...new Set((options.candidates ?? modelCandidates()).filter(Boolean))];
+  const attempts: ModelAttempt[] = [];
+
+  while (queue.length > 0) {
+    const model = queue.shift() as string;
+    try {
+      const value = await call(model);
+      discoveredModel = model;
+      attempts.push({ model, ok: true });
+      return { ok: true, value, model, attempts };
+    } catch (error) {
+      const failure = classifyGeminiError(error);
+      const recommended =
+        failure.kind === "model-unavailable"
+          ? extractRecommendedModel(error instanceof Error ? error.message : String(error))
+          : null;
+      attempts.push({ model, ok: false, failure, ...(recommended ? { recommended } : {}) });
+
+      if (failure.kind !== "model-unavailable") {
+        return { ok: false, failure, model, attempts };
+      }
+
+      // Believe Google's suggestion before our own list, and never retry a
+      // name we have already burned.
+      const tried = new Set(attempts.map((attempt) => attempt.model));
+      if (recommended && !tried.has(recommended) && !queue.includes(recommended)) {
+        queue.unshift(recommended);
+      }
+    }
+  }
+
+  const last = attempts.at(-1);
+  return {
+    ok: false,
+    model: last?.model ?? "",
+    failure:
+      last?.failure ??
+      classifyGeminiError(new Error("No Gemini model candidates were available.")),
+    attempts,
+  };
+}
+
 /**
  * Ask the model for a two-token answer. Used by `/api/health?deep=1` and the
  * /status page to prove the key works end-to-end, with thinking disabled so it
  * costs roughly nothing against the free quota.
+ *
+ * Rotates models if Google refuses the configured one, and reports which model
+ * actually answered — a green tick on a model you did not configure should be
+ * visible, not hidden.
  */
 export async function probeGemini(
   options: { model?: string; timeoutMs?: number } = {},
 ): Promise<
-  | { ok: true; model: string; latencyMs: number; reply: string }
-  | { ok: false; model: string; failure: GeminiFailure }
+  | {
+      ok: true;
+      model: string;
+      requestedModel: string;
+      switched: boolean;
+      attempts: ModelAttempt[];
+      latencyMs: number;
+      reply: string;
+    }
+  | {
+      ok: false;
+      model: string;
+      requestedModel: string;
+      attempts: ModelAttempt[];
+      failure: GeminiFailure;
+    }
 > {
-  const model = options.model ?? getGeminiModel();
+  /** The preference: env override, else the project default. What we report against. */
+  const requestedModel = options.model ?? getConfiguredGeminiModel();
+  /**
+   * Where this call actually starts. If a previous call discovered that the
+   * preference is refused, it starts there instead — otherwise every probe would
+   * re-burn free-tier quota rediscovering the same 404.
+   */
+  const startModel = options.model ?? getGeminiModel();
   const timeoutMs = options.timeoutMs ?? 15_000;
   const startedAt = Date.now();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  try {
-    const ai = getGeminiClient();
-    const response = await ai.models.generateContent({
-      model,
-      contents: "Reply with exactly: pong",
-      config: {
-        maxOutputTokens: 2048, // room for the answer; thinking is disabled below
-        temperature: 0,
-        abortSignal: controller.signal,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    });
+  const run = await runWithModelFallback(
+    async (model) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const ai = getGeminiClient();
+        const response = await ai.models.generateContent({
+          model,
+          contents: "Reply with exactly: pong",
+          config: {
+            maxOutputTokens: 2048, // room for the answer; thinking is disabled below
+            temperature: 0,
+            abortSignal: controller.signal,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
+        });
+        return (response.text ?? "").trim().slice(0, 40) || "(empty response)";
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    // Start from the best-known model, then this project's known-good list.
+    { candidates: [startModel, ...modelCandidates().filter((m) => m !== startModel)] },
+  );
 
+  if (!run.ok) {
     return {
-      ok: true,
-      model,
-      latencyMs: Date.now() - startedAt,
-      reply: (response.text ?? "").trim().slice(0, 40) || "(empty response)",
+      ok: false,
+      model: run.model,
+      requestedModel,
+      attempts: run.attempts,
+      failure: run.failure,
     };
-  } catch (error) {
-    return { ok: false, model, failure: classifyGeminiError(error) };
-  } finally {
-    clearTimeout(timer);
   }
+
+  return {
+    ok: true,
+    model: run.model,
+    requestedModel,
+    /**
+     * True when the model in use is not the configured preference — i.e. Google
+     * refuses what this project asks for. Deliberately *stable* across calls
+     * (not "did we rotate just now"), because that is the state worth warning
+     * about and pinning with GEMINI_MODEL.
+     */
+    switched: run.model !== requestedModel,
+    attempts: run.attempts,
+    latencyMs: Date.now() - startedAt,
+    reply: run.value,
+  };
 }

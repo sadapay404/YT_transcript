@@ -12,10 +12,8 @@ import {
 
 import { APP_TAGLINE } from "@/lib/constants";
 import { ClipPalettePreview } from "@/components/studio/ClipPalettePreview";
-import { LayoutPreview } from "@/components/studio/LayoutPreview";
 import { ThemeGallery } from "@/components/studio/ThemeGallery";
 import { TypographyStudio } from "@/components/studio/TypographyStudio";
-import { ViewModeSwitch } from "@/components/layout/ViewModeSwitch";
 import { UrlBar } from "@/components/workspace/UrlBar";
 
 const HEADLINE = ["Read", "it.", "Clip", "it.", "Ship", "it."];
@@ -107,19 +105,6 @@ export function LandingView() {
         >
           <UrlBar autoFocus />
         </motion.div>
-      </section>
-
-      {/* ── Layout preview ───────────────────────────────────────────────── */}
-      <section className="mt-14">
-        <SectionHeading
-          eyebrow="View modes"
-          title="Fluid panes"
-          body="Switch the layout and the panes reflow with shared-layout animation — no remount, no jank, no video reload."
-          action={<ViewModeSwitch />}
-        />
-        <div className="panel mt-4 p-3">
-          <LayoutPreview />
-        </div>
       </section>
 
       {/* ── Themes ───────────────────────────────────────────────────────── */}

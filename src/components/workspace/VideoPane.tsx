@@ -42,6 +42,8 @@ export function VideoPane({ className }: { className?: string }) {
   const railRef = useRef<HTMLDivElement>(null);
 
   const isDemo = transcript?.source === "demo";
+  const isPaste = transcript?.source === "paste";
+  const noPlayer = isDemo || isPaste;
   const isPlaying = status === "playing" || status === "buffering";
   const effectiveDuration = duration || transcript?.durationSeconds || 0;
   const progress =
@@ -68,8 +70,8 @@ export function VideoPane({ className }: { className?: string }) {
     <section className={cn("flex flex-col", className)} aria-label="Video">
       {/* ── Video / placeholder ─────────────────────────────────────────── */}
       <div className="relative aspect-video w-full overflow-hidden rounded-t-[var(--radius-panel)] bg-black">
-        {isDemo || !metadata?.videoId ? (
-          <DemoBackdrop />
+        {isDemo || isPaste || !metadata?.videoId || metadata.videoId === "pasted" ? (
+          <DemoBackdrop pasted={isPaste} />
         ) : (
           <YouTubePlayer
             videoId={metadata.videoId}
@@ -79,7 +81,7 @@ export function VideoPane({ className }: { className?: string }) {
         )}
 
         {/* Buffering shimmer */}
-        {!isDemo && status === "buffering" && !playerError && (
+        {!noPlayer && status === "buffering" && !playerError && (
           <motion.span
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -90,7 +92,7 @@ export function VideoPane({ className }: { className?: string }) {
         )}
 
         {/* Big play affordance before first playback */}
-        {!isDemo && playerReady && !isPlaying && currentTime === 0 && (
+        {!noPlayer && playerReady && !isPlaying && currentTime === 0 && (
           <button
             type="button"
             onClick={togglePlay}
@@ -117,22 +119,22 @@ export function VideoPane({ className }: { className?: string }) {
           aria-valuenow={Math.round(currentTime)}
           aria-valuetext={`${formatTimestamp(currentTime, effectiveDuration >= 3600)} of ${formatDuration(effectiveDuration)}`}
           onPointerDown={(event) => {
-            if (isDemo) return;
+            if (noPlayer) return;
             event.currentTarget.setPointerCapture(event.pointerId);
             scrubTo(event.clientX);
           }}
           onPointerMove={(event) => {
-            if (event.buttons !== 1 || isDemo) return;
+            if (event.buttons !== 1 || noPlayer) return;
             scrubTo(event.clientX);
           }}
           onKeyDown={(event) => {
-            if (isDemo) return;
+            if (noPlayer) return;
             if (event.key === "ArrowRight") seekTo(currentTime + 5);
             if (event.key === "ArrowLeft") seekTo(currentTime - 5);
           }}
           className={cn(
             "group relative h-4 cursor-pointer",
-            (isDemo || !playerReady) && "cursor-default opacity-60",
+            (noPlayer || !playerReady) && "cursor-default opacity-60",
           )}
         >
           <span className="absolute top-1/2 h-1 w-full -translate-y-1/2 overflow-hidden rounded-full bg-ink/12">
@@ -152,7 +154,7 @@ export function VideoPane({ className }: { className?: string }) {
           <button
             type="button"
             onClick={togglePlay}
-            disabled={isDemo || !playerReady}
+            disabled={noPlayer || !playerReady}
             title={isPlaying ? "Pause (space)" : "Play (space)"}
             className="btn btn-icon h-9 w-9 border border-line disabled:opacity-40"
           >
@@ -162,7 +164,7 @@ export function VideoPane({ className }: { className?: string }) {
           <button
             type="button"
             onClick={() => seekTo(Math.max(0, currentTime - 10))}
-            disabled={isDemo || !playerReady}
+            disabled={noPlayer || !playerReady}
             title="Back 10 seconds"
             className="btn btn-icon hidden h-9 w-9 border border-line disabled:opacity-40 sm:inline-flex"
           >
@@ -188,14 +190,14 @@ export function VideoPane({ className }: { className?: string }) {
           <button
             type="button"
             onClick={toggleMute}
-            disabled={isDemo || !playerReady}
+            disabled={noPlayer || !playerReady}
             title="Mute / unmute"
             className="btn btn-icon h-9 w-9 border border-line disabled:opacity-40"
           >
             {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
 
-          {metadata?.videoId && (
+          {metadata?.videoId && metadata.videoId !== "pasted" && (
             <a
               href={`https://www.youtube.com/watch?v=${metadata.videoId}&t=${Math.floor(currentTime)}s`}
               target="_blank"
@@ -212,22 +214,23 @@ export function VideoPane({ className }: { className?: string }) {
   );
 }
 
-/** Shown for the demo transcript, which has no video behind it. */
-function DemoBackdrop() {
+/** Shown when there is a transcript but no embeddable video behind it. */
+function DemoBackdrop({ pasted = false }: { pasted?: boolean }) {
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-canvas-2">
       <div className="absolute inset-0 bg-[radial-gradient(120%_100%_at_20%_0%,color-mix(in_oklab,var(--accent)_28%,transparent),transparent_62%)]" />
       <div className="aurora-grid absolute inset-0" />
       <div className="relative max-w-sm px-6 text-center">
         <p className="font-mono text-[10px] tracking-[0.2em] text-accent uppercase">
-          Demo transcript
+          {pasted ? "Pasted transcript" : "Demo transcript"}
         </p>
         <p className="mt-2 text-[15px] font-semibold text-ink">
           There&apos;s no video behind this one
         </p>
         <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-soft">
-          It exists so you can read, seek and export without a network. Paste a real
-          YouTube link to load an actual video.
+          {pasted
+            ? "Reading, seeking and exporting work from the text you pasted. No network call was made."
+            : "It exists so you can read, seek and export without a network. Paste a real YouTube link to load an actual video."}
         </p>
       </div>
     </div>
