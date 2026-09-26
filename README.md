@@ -33,6 +33,13 @@ Full walkthrough (Vercel, Netlify, Cloudflare, CLI, domains, troubleshooting):
 
 ---
 
+### "YouTube blocked caption requests from this server"
+
+YouTube blocks cloud IPs, so the hosted site can't fetch captions by itself.
+Visitors can add the free **TranStudio Connector** browser add-on (open
+`/connector` on your site). Captions then come from their own connection. See
+[docs/CONNECTOR.md](docs/CONNECTOR.md).
+
 ## Quick start
 
 ```bash

@@ -1,16 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { extractTranscriptAction, loadDemoTranscriptAction, fetchCaptionsInBrowser } = vi.hoisted(() => ({
+const {
+  extractTranscriptAction,
+  loadDemoTranscriptAction,
+  fetchCaptionsInBrowser,
+  fetchCaptionsViaConnector,
+  detectConnector,
+} = vi.hoisted(() => ({
   extractTranscriptAction: vi.fn(),
   loadDemoTranscriptAction: vi.fn(),
   fetchCaptionsInBrowser: vi.fn(),
+  fetchCaptionsViaConnector: vi.fn(),
+  detectConnector: vi.fn(),
 }));
 
 vi.mock("@/app/actions/transcript", () => ({
   extractTranscriptAction,
   loadDemoTranscriptAction,
 }));
-vi.mock("@/lib/transcript/browser-captions", () => ({ fetchCaptionsInBrowser }));
+vi.mock("@/lib/transcript/browser-captions", () => ({ fetchCaptionsInBrowser, fetchCaptionsViaConnector }));
+vi.mock("@/lib/connector/client", () => ({ detectConnector }));
 
 import { useTranscriptStore } from "@/stores/useTranscriptStore";
 import { usePlaybackStore } from "@/stores/usePlaybackStore";
@@ -45,6 +54,9 @@ function demoResult(): Extract<FetchTranscriptResult, { ok: true }> {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  // Default: no Connector add-on in this "browser".
+  detectConnector.mockResolvedValue(null);
+  fetchCaptionsViaConnector.mockResolvedValue(null);
   useTranscriptStore.getState().reset();
 });
 
@@ -197,6 +209,49 @@ function okResult(videoId: string, text: string): Extract<FetchTranscriptResult,
     },
   };
 }
+
+describe("TranStudio Connector add-on", () => {
+  it("goes connector-first and skips the blocked server when the add-on answers", async () => {
+    detectConnector.mockResolvedValue({ version: "1.0.0" });
+    fetchCaptionsViaConnector.mockResolvedValue({
+      ok: true,
+      via: "connector",
+      segments: browserSegments,
+      format: "json3",
+      language: "en",
+      attempts: ["✓ connector · android-vr — 1 lines"],
+    });
+
+    await useTranscriptStore.getState().extract(INPUT);
+
+    const state = useTranscriptStore.getState();
+    expect(extractTranscriptAction).not.toHaveBeenCalled();
+    expect(fetchCaptionsInBrowser).not.toHaveBeenCalled();
+    expect(state.status).toBe("success");
+    expect(state.transcript?.videoId).toBe(VIDEO_ID);
+    expect(state.transcript?.strategy).toBe("connector:json3");
+    expect(state.notice).toBeNull();
+  });
+
+  it("falls back to the server when the add-on is installed but can't get captions", async () => {
+    detectConnector.mockResolvedValue({ version: "1.0.0" });
+    fetchCaptionsViaConnector.mockResolvedValue({
+      ok: false,
+      via: "connector",
+      reason: "No captions",
+      attempts: ["✗ connector · android-vr — no tracks"],
+    });
+    extractTranscriptAction.mockResolvedValue(demoResult());
+    fetchCaptionsInBrowser.mockResolvedValue({ ok: false, reason: "Failed to fetch", attempts: [] });
+
+    await useTranscriptStore.getState().extract(INPUT);
+
+    const state = useTranscriptStore.getState();
+    expect(extractTranscriptAction).toHaveBeenCalledTimes(1);
+    expect(state.diagnostics[0]).toBe("✗ connector · android-vr — no tracks");
+    expect(state.transcript).not.toBeNull();
+  });
+});
 
 describe("loading one video after another", () => {
   it("never lets an older, slower response replace the newer video", async () => {

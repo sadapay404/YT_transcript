@@ -145,21 +145,32 @@ function request<T extends ConnectorMessage>(
 /* ─────────────────────────────── public API ─────────────────────────────── */
 
 let detected: Promise<string | null> | null = null;
+let missingSince = 0;
+/** A "not installed" answer is trusted this long before asking again. */
+const NEGATIVE_TTL_MS = 30_000;
 
 /**
  * Resolve to the add-on version when the TranStudio Connector is installed and
- * enabled on this page, otherwise `null`. A positive answer is cached; a
- * negative one is re-checked next time (the visitor may install it meanwhile).
+ * enabled on this page, otherwise `null`. A positive answer is cached for the
+ * page's life; a negative one for 30s (or until `force`), since the visitor
+ * may install it meanwhile. The desktop app never has it, so it never waits.
  */
-export function detectConnector(timeoutMs = 700): Promise<string | null> {
+export function detectConnector(timeoutMs = 700, force = false): Promise<string | null> {
   if (typeof window === "undefined") return Promise.resolve(null);
-  if (detected) return detected;
+  if (/\bElectron\//.test(window.navigator.userAgent)) return Promise.resolve(null);
+  if (!force && missingSince && Date.now() - missingSince < NEGATIVE_TTL_MS) return Promise.resolve(null);
+  if (detected && !force) return detected;
   const attempt = request<ConnectorMessage>("ping", {}, timeoutMs)
     .then((reply) => (reply.type === "pong" ? reply.version ?? "1" : null))
     .catch(() => null);
   detected = attempt;
-  attempt.then((version) => {
-    if (!version) detected = null;
+  void attempt.then((version) => {
+    if (version) {
+      missingSince = 0;
+    } else {
+      missingSince = Date.now();
+      if (detected === attempt) detected = null;
+    }
   });
   return attempt;
 }

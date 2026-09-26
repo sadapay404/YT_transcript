@@ -19,6 +19,7 @@ import { UrlBar } from "@/components/workspace/UrlBar";
 import { TranscriptPane } from "@/components/workspace/TranscriptPane";
 import { VideoPane } from "@/components/workspace/VideoPane";
 import { AssistantPanel } from "@/components/assistant/AssistantPanel";
+import { ConnectorOffer } from "@/components/connector/ConnectorOffer";
 import { useCinemaShrink } from "@/hooks/useCinemaShrink";
 import { usePlaybackStore } from "@/stores/usePlaybackStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
@@ -179,6 +180,7 @@ export function Workspace() {
                     <ClipboardPaste className="h-3 w-3" />
                     Paste a transcript
                   </button>
+                  <ConnectorOffer />
                 </span>
               )}
             </div>
@@ -431,6 +433,7 @@ function ErrorState({
           <ClipboardPaste className="h-3.5 w-3.5" />
           Paste a transcript
         </button>
+        <ConnectorOffer size="md" />
         <button type="button" onClick={onDemo} className="btn btn-outline h-9 gap-2 px-3">
           Demo transcript
         </button>
