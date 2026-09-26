@@ -47,10 +47,6 @@ jobs:
       - name: Prepare the standalone Electron payload
         run: npm run desktop:prepare
         env:
-          # Built-in NexAI keys so friends don't have to set anything up.
-          # Add them under repo Settings → Secrets and variables → Actions.
-          # Missing secrets are simply empty and the app falls back to its
-          # normal "not set up" state.
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
