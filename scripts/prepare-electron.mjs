@@ -1,4 +1,5 @@
-import { access, cp, mkdir, readdir, realpath, rm, stat } from "node:fs/promises";
+import { access, cp, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -74,7 +75,50 @@ if (await exists(publicSource)) {
   await cp(publicSource, publicDestination, { recursive: true });
 }
 
+/**
+ * Built-in AI keys. Taken from the build environment (GitHub Actions secrets
+ * in CI), falling back to the repository's .env.local for a local build. Only
+ * the allow-listed AI variables are bundled. With no keys at all, the stale
+ * file is removed and the app shows its normal "not set up" state.
+ */
+const require = createRequire(import.meta.url);
+const { BUNDLED_KEY_NAMES, BUNDLED_KEYS_FILE, encodeBundledKeys } = require("../electron/bundled-keys.cjs");
+
+async function readLocalEnv() {
+  try {
+    const values = {};
+    const text = await readFile(path.join(repositoryRoot, ".env.local"), "utf8");
+    for (const line of text.split(/\r?\n/)) {
+      const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+      if (!match) continue;
+      values[match[1]] = match[2].replace(/^(['"])(.*)\1$/, "$2");
+    }
+    return values;
+  } catch {
+    return {};
+  }
+}
+
+const buildEnv = Object.fromEntries(
+  BUNDLED_KEY_NAMES.filter((name) => process.env[name]?.trim()).map((name) => [name, process.env[name]]),
+);
+const keySource = Object.keys(buildEnv).length > 0 ? buildEnv : await readLocalEnv();
+const bundledPayload = encodeBundledKeys(keySource);
+if (bundledPayload) {
+  await writeFile(BUNDLED_KEYS_FILE, bundledPayload, "utf8");
+} else {
+  await rm(BUNDLED_KEYS_FILE, { force: true });
+}
+const bundledNames = bundledPayload
+  ? BUNDLED_KEY_NAMES.filter((name) => typeof keySource[name] === "string" && keySource[name].trim())
+  : [];
+
 console.log("Electron payload prepared:");
 console.log(`  server: ${path.join(standaloneRoot, "server.js")}`);
 console.log(`  static: ${staticDestination}`);
 if (await exists(publicDestination)) console.log(`  public: ${publicDestination}`);
+console.log(
+  bundledNames.length > 0
+    ? `  built-in AI keys: ${bundledNames.join(", ")} (values not shown)`
+    : "  built-in AI keys: none — NexAI will ask for a key on each PC",
+);
