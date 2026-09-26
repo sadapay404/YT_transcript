@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "TranStudio Connector",
+  "short_name": "TranStudio",
+  "version": "1.0.0",
+  "description": "Lets your TranStudio site read YouTube captions over your own internet connection. It talks to youtube.com only and stores nothing.",
+  "homepage_url": "https://github.com/sadapay404/YT_transcript",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["declarativeNetRequestWithHostAccess"],
+  "host_permissions": ["https://www.youtube.com/*", "https://m.youtube.com/*"],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["policy.js", "background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.vercel.app/*", "http://localhost/*", "http://127.0.0.1/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_title": "TranStudio Connector",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "transtudio-connector@mubashir",
+      "strict_min_version": "128.0",
+      "data_collection_permissions": { "required": ["none"] }
+    }
+  }
+}

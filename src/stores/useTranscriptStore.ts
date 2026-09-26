@@ -17,7 +17,12 @@ import type {
 } from "@/lib/types";
 import { extractTranscriptAction, loadDemoTranscriptAction } from "@/app/actions/transcript";
 import { describePasteFormat, parsePastedTranscript } from "@/lib/transcript/paste";
-import { fetchCaptionsInBrowser } from "@/lib/transcript/browser-captions";
+import {
+  fetchCaptionsInBrowser,
+  fetchCaptionsViaConnector,
+  type BrowserCaptionResult,
+} from "@/lib/transcript/browser-captions";
+import { detectConnector } from "@/lib/connector/client";
 import { countWords, parseYouTubeUrl } from "@/lib/utils";
 
 export interface TranscriptError {
@@ -64,7 +69,14 @@ interface TranscriptState {
     expectedInput?: string;
     /** Internal load token; stale browser reads are discarded. */
     loadId?: number;
-  }) => Promise<{ ok: boolean; message: string }>;
+    /**
+     * Internal: only try the TranStudio Connector add-on, and on failure leave
+     * the state alone (the caller falls back to the server path).
+     */
+    connectorOnly?: boolean;
+    /** Internal: the Connector was already tried for this load. */
+    skipConnector?: boolean;
+  }) => Promise<{ ok: boolean; message: string; attempts?: string[] }>;
   extract: (input: string) => Promise<void>;
   retry: () => Promise<void>;
   loadDemo: () => Promise<void>;
@@ -209,14 +221,31 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     }
     set({ status: "loading", error: null });
 
-    let result: Awaited<ReturnType<typeof fetchCaptionsInBrowser>>;
+    let result: BrowserCaptionResult;
     try {
-      result = await fetchCaptionsInBrowser(videoId, {
-        lang: get().transcript?.language,
-        timeoutMs: options.timeoutMs ?? 8_000,
-      });
+      // 1) The TranStudio Connector add-on, when installed: the full caption
+      //    ladder, sent from the visitor's own connection.
+      const viaConnector = options.skipConnector
+        ? null
+        : await fetchCaptionsViaConnector(videoId, { lang: get().transcript?.language });
+      if (viaConnector?.ok) {
+        result = viaConnector;
+      } else if (options.connectorOnly) {
+        const reason = viaConnector?.ok === false ? viaConnector.reason : "The TranStudio Connector is not installed.";
+        return { ok: false, message: reason, attempts: viaConnector?.attempts ?? [] };
+      } else {
+        // 2) A plain browser read (works only if YouTube allows the CORS read).
+        const direct = await fetchCaptionsInBrowser(videoId, {
+          lang: get().transcript?.language,
+          timeoutMs: options.timeoutMs ?? 8_000,
+        });
+        result = direct.ok
+          ? direct
+          : { ...direct, attempts: [...(viaConnector?.attempts ?? []), ...direct.attempts] };
+      }
     } catch (error) {
       const reason = error instanceof Error ? error.message : "The browser caption request failed.";
+      if (options.connectorOnly) return { ok: false, message: reason, attempts: [`✗ connector — ${reason}`] };
       return finishBrowserFailure(reason, [`✗ browser — ${reason}`]);
     }
 
@@ -229,6 +258,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     }
 
     const text = result.segments.map((segment) => segment.text).join(" ");
+    const viaConnector = result.via === "connector";
     set((state) => {
       const existingMetadata = state.metadata?.videoId === videoId ? state.metadata : undefined;
       const previousTranscript = state.transcript;
@@ -242,6 +272,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         clips: [],
         metadata: {
           ...(existingMetadata ?? {}),
+          ...(result.title && !existingMetadata?.title ? { title: result.title } : {}),
+          ...(result.author && !existingMetadata?.author ? { author: result.author } : {}),
           videoId,
           url,
           thumbnailUrl:
@@ -249,19 +281,30 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
           ...(typeof startAt === "number" ? { startAt } : {}),
         },
         diagnostics: result.attempts,
-        notice: fromDemo
-          ? "Captions came from your own connection — YouTube blocked the server path, but the browser path succeeded."
-          : "Captions came from your own connection.",
+        // The Connector is the normal path once installed — no banner for it.
+        notice: viaConnector
+          ? null
+          : fromDemo
+            ? "Captions came from your own connection — YouTube blocked the server path, but the browser path succeeded."
+            : "Captions came from your own connection.",
         lastFetchedAt: Date.now(),
         transcript: {
           videoId,
-          title: fromDemo ? undefined : previousTranscript?.title,
+          title:
+            result.title ??
+            (!fromDemo && previousTranscript?.videoId === videoId ? previousTranscript.title : undefined),
           url,
           language: result.language,
-          languageLabel: `${result.language} (from your browser)`,
-          isAutoGenerated: fromDemo ? false : previousTranscript?.isAutoGenerated ?? false,
+          languageLabel: viaConnector
+            ? result.languageLabel ?? result.language
+            : `${result.language} (from your browser)`,
+          isAutoGenerated:
+            result.isAutoGenerated ??
+            (!fromDemo && previousTranscript?.videoId === videoId
+              ? previousTranscript.isAutoGenerated ?? false
+              : false),
           source: "browser",
-          strategy: `browser:${result.format}`,
+          strategy: `${viaConnector ? "connector" : "browser"}:${result.format}`,
           segments: result.segments,
           text,
           wordCount: countWords(text),
@@ -271,7 +314,12 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         },
       };
     });
-    return { ok: true, message: "Captions loaded from your connection." };
+    return {
+      ok: true,
+      message: viaConnector
+        ? "Captions loaded through the TranStudio Connector."
+        : "Captions loaded from your connection.",
+    };
   },
 
   extract: async (input: string) => {
@@ -291,10 +339,37 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
       // doesn't collapse and re-flow on every fetch.
     });
 
+    // Connector first: when the visitor has the TranStudio Connector add-on,
+    // their own connection is the path that works on a cloud host, so skip the
+    // server's (blocked) ladder entirely. Without it this costs one quick ping.
+    let connectorAttempts: string[] = [];
+    let connectorTried = false;
+    if (requestedVideoId && (await detectConnector(400))) {
+      if (!isLatest()) return;
+      connectorTried = true;
+      try {
+        const viaConnector = await get().fetchInBrowser({
+          videoId: requestedVideoId,
+          expectedInput: trimmed,
+          loadId,
+          connectorOnly: true,
+        });
+        if (!isLatest()) return;
+        if (viaConnector.ok) return;
+        connectorAttempts = viaConnector.attempts ?? [];
+        set({ status: "loading", error: null });
+      } catch {
+        // Fall through to the server path.
+      }
+    }
+
     try {
       const result = await extractTranscriptAction(trimmed);
       if (!isLatest()) return;
       applyResult(result, set);
+      if (connectorAttempts.length > 0) {
+        set((state) => ({ diagnostics: [...connectorAttempts, ...state.diagnostics] }));
+      }
 
       // The server remains the first path. A demo is an environmental fallback,
       // not an answer about the requested video; an error can also be a disguised
@@ -310,6 +385,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         try {
           await get().fetchInBrowser({
             ...(preservingDemo ? { silent: true } : {}),
+            ...(connectorTried ? { skipConnector: true } : {}),
             timeoutMs: 8_000,
             videoId: requestedVideoId,
             expectedInput: trimmed,

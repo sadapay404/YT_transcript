@@ -42,6 +42,9 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: APP_NAME }],
   manifest: "/manifest.webmanifest",
+  // Opt-in marker for the TranStudio Connector add-on (see /extension): its
+  // page bridge only answers on pages that carry this tag.
+  other: { "transtudio-connector": "1" },
   appleWebApp: {
     capable: true,
     title: APP_NAME,

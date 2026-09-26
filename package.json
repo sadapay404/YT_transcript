@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "connector:pack": "node scripts/pack-connector.mjs",
+    "prebuild": "node scripts/pack-connector.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -44,7 +46,7 @@
     "typescript": "^5",
     "vitest": "^5.0.1"
   },
-  "description": "TranStudio — read any YouTube video: synchronized transcripts, readable exports, free-tier AI.",
+  "description": "TranStudio \u2014 read any YouTube video: synchronized transcripts, readable exports, free-tier AI.",
   "engines": {
     "node": "22.x"
   },
