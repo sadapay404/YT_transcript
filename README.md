@@ -54,6 +54,26 @@ npm run build && npm start
 # then open http://localhost:3000/status  ← live diagnostics dashboard
 ```
 
+## Installable Windows app
+
+TranStudio also has an Electron desktop target that reuses this same Next.js/React UI,
+animations, Steps 1–3, transcript data layer, AI surfaces, and paste fallback. The
+installed app starts a local standalone Next server, so transcript server actions make
+requests from the user's Windows network/IP instead of depending on Vercel. The web
+version remains unchanged.
+
+```bash
+# Build the unsigned NSIS installer (run on Windows or in the Windows Actions job)
+npm ci
+npm run desktop:build
+# → release/TranStudio-Setup-0.1.0.exe
+```
+
+For local Electron development, installer verification, optional Gemini configuration,
+and the native-network limitations, see **[docs/DESKTOP.md](docs/DESKTOP.md)**. The
+repository does not claim an `.exe` works until the Windows workflow artifact has been
+installed and checked on Windows.
+
 If you are scaffolding this project from scratch, the exact command used was:
 
 ```bash
@@ -74,6 +94,7 @@ npm install framer-motion lucide-react zustand youtube-transcript @google/genai 
 | Layer      | Choice                                                              |
 | ---------- | ------------------------------------------------------------------- |
 | Framework  | Next.js 16 (App Router, Turbopack, React 19)                        |
+| Desktop    | Electron + electron-builder (local standalone Next server on Windows) |
 | Styling    | Tailwind CSS v4 + CSS custom properties (4 full themes)             |
 | Motion     | Framer Motion (shared-layout transitions, kinetic typography)       |
 | Player     | YouTube IFrame Player API — raw, no player dependency               |

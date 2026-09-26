@@ -221,6 +221,30 @@ The complete five-step build is **not** merged yet — merge it only when the ow
 explicitly asks. Production confirmation remains a deployment/browser check,
 not a claim made from the sandbox.
 
+## Windows desktop target (not yet verified on Windows)
+
+The same React/Next studio can be packaged as an unsigned Windows NSIS installer
+without rebuilding the UI in another toolkit:
+
+- `next.config.ts` enables standalone output.
+- `electron/main.cjs` starts that standalone server on loopback, loads it in a
+  hardened Electron window, opens external links in the system browser, and
+  stops the child server on exit.
+- `scripts/prepare-electron.mjs` copies Next's static payload into the traced
+  server tree before `electron-builder` packages it.
+- `npm run desktop:build` is the repeatable installer command; the Windows
+  workflow uploads `TranStudio-Setup-*.exe` as an artifact.
+- The installed server receives optional Gemini configuration from
+  `%APPDATA%\\TranStudio\\.env.local`; no key is needed for transcript reading.
+
+This sandbox verified typecheck, lint, tests, the production Next build, the
+standalone payload preparation, and a local standalone server response. It has
+not installed or launched a Windows `.exe`; only a real Windows install/run
+check can establish that result. Do not merge this PR until the owner explicitly
+asks.
+
+Full desktop instructions and limitations are in [`docs/DESKTOP.md`](DESKTOP.md).
+
 ## Deployment prerequisites (Vercel)
 
 Vercel detects the framework **once, at import**, and stores it as a project
