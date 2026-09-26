@@ -41,6 +41,25 @@ describe("classifyGeminiError", () => {
 });
 
 describe("runWithModelFallback", () => {
+  it("keeps an explicit pin first until it is refused, then keeps it as a fallback", async () => {
+    process.env.GEMINI_MODEL = "gemini-pinned";
+    expect(modelCandidates()[0]).toBe("gemini-pinned");
+
+    const result = await runWithModelFallback(
+      async (model) => {
+        if (model === "gemini-pinned") {
+          throw new Error("model not found; use models/gemini-3.8-flash instead");
+        }
+        return "pong";
+      },
+      { candidates: modelCandidates() },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(modelCandidates()[0]).toBe("gemini-3.8-flash");
+    expect(modelCandidates()).toContain("gemini-pinned");
+  });
+
   it("pivots to the model named in Google's error, remembers it, and does not retry quota", async () => {
     const calls: string[] = [];
     const retired = new Error(

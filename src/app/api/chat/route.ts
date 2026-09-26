@@ -2,6 +2,7 @@ import { GEMINI } from "@/lib/constants";
 import { CLIP_PLAN_SCHEMA, ASSISTANT_SYSTEM_PROMPT, buildUserPrompt } from "@/lib/gemini/prompts";
 import {
   classifyGeminiError,
+  extractRecommendedModel,
   getGeminiClient,
   modelCandidates,
   markGeminiModelUnavailable,
@@ -177,7 +178,9 @@ async function produceStream(
       // A model refusal before the first delta is the only safe streaming retry.
       if (failure.kind === "model-unavailable" && !emittedText) {
         markGeminiModelUnavailable(model);
-        const recommendation = failure.message.match(/"([\w.\-]+)"/)?.[1];
+        const recommendation =
+          extractRecommendedModel(error instanceof Error ? error.message : String(error)) ??
+          failure.message.match(/"([\w.\-]+)"/)?.[1];
         queueSuggestion(queue, recommendation);
         continue;
       }
