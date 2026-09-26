@@ -11,9 +11,10 @@
  */
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, ArrowRight, ChevronRight, Info, Keyboard } from "lucide-react";
+import { AlertTriangle, ChevronRight, ClipboardPaste, Info, Keyboard, RefreshCw } from "lucide-react";
 
 import { cn, shouldPullIntoView } from "@/lib/utils";
+import { PasteTranscriptDialog } from "@/components/workspace/PasteTranscriptDialog";
 import { UrlBar } from "@/components/workspace/UrlBar";
 import { TranscriptPane } from "@/components/workspace/TranscriptPane";
 import { VideoPane } from "@/components/workspace/VideoPane";
@@ -30,6 +31,8 @@ export function Workspace() {
   const error = useTranscriptStore((s) => s.error);
   const notice = useTranscriptStore((s) => s.notice);
   const loadDemo = useTranscriptStore((s) => s.loadDemo);
+  const fetchInBrowser = useTranscriptStore((s) => s.fetchInBrowser);
+  const openPaste = useTranscriptStore((s) => s.openPaste);
 
   const viewMode = useSettingsStore((s) => s.viewMode);
   const togglePlay = usePlaybackStore((s) => s.togglePlay);
@@ -92,10 +95,13 @@ export function Workspace() {
   }, [controller, togglePlay]);
 
   // Nothing to show until something is being read: the landing page above owns
-  // the empty state, the slogan and the URL bar.
-  if (!mounted) return null;
-
+  // the empty state, the slogan and the URL bar. The paste dialog stays mounted
+  // either way — the hero can open it before the studio exists, and a successful
+  // paste must not remount it out from under the confirmation.
   return (
+    <>
+    <PasteTranscriptDialog />
+    {mounted && (
     <div
       ref={rootRef}
       className="mx-auto flex w-full max-w-[1900px] flex-1 scroll-mt-16 flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4">
@@ -125,6 +131,8 @@ export function Workspace() {
             code={error.code}
             diagnostics={error.diagnostics}
             onDemo={() => void loadDemo()}
+            onPaste={openPaste}
+            onBrowserFetch={() => void fetchInBrowser()}
           />
         ) : (
           <motion.div
@@ -214,6 +222,8 @@ export function Workspace() {
         </p>
       )}
     </div>
+    )}
+    </>
   );
 }
 
@@ -252,12 +262,16 @@ function ErrorState({
   code,
   diagnostics,
   onDemo,
+  onPaste,
+  onBrowserFetch,
 }: {
   message: string;
   hint?: string;
   code: string;
   diagnostics?: string[];
   onDemo: () => void;
+  onPaste: () => void;
+  onBrowserFetch: () => void;
 }) {
   return (
     <motion.div
@@ -302,14 +316,20 @@ function ErrorState({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={onDemo} className="btn btn-primary h-9 gap-2 px-3">
-          Load the demo transcript
-          <ArrowRight className="h-3.5 w-3.5" />
+        {/* Two routes that need nothing from this server: the visitor's own
+            connection, and the transcript already in their browser tab. */}
+        <button type="button" onClick={onBrowserFetch} className="btn btn-primary h-9 gap-2 px-3">
+          <RefreshCw className="h-3.5 w-3.5" />
+          Try from my connection
         </button>
-        <a
-          href="/status"
-          className="btn btn-outline h-9 gap-2 px-3"
-        >
+        <button type="button" onClick={onPaste} className="btn h-9 gap-2 border border-line px-3">
+          <ClipboardPaste className="h-3.5 w-3.5" />
+          Paste a transcript
+        </button>
+        <button type="button" onClick={onDemo} className="btn btn-outline h-9 gap-2 px-3">
+          Demo transcript
+        </button>
+        <a href="/status" className="btn btn-outline h-9 gap-2 px-3">
           Run diagnostics
         </a>
       </div>

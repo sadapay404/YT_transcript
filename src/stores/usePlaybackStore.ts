@@ -102,11 +102,12 @@ export const usePlaybackStore = create<PlaybackStore>((set, get) => ({
   setLoopRange: (loopRange) => set({ loopRange }),
 
   seekTo: (seconds) => {
+    const safe = Math.max(0, seconds);
     const { controller } = get();
-    if (!controller) return;
-    controller.seekTo(Math.max(0, seconds));
-    // Optimistically move the marker so the UI responds instantly.
-    get().updateTime(Math.max(0, seconds));
+    // A pasted transcript has timestamps but no player. Still publish the time
+    // so click-to-seek can mark the active line without a network round-trip.
+    if (controller) controller.seekTo(safe);
+    get().updateTime(safe);
   },
 
   togglePlay: () => {

@@ -257,13 +257,21 @@ async function geminiApiCheck(): Promise<HealthCheck> {
 
   const result = await probeGemini();
   if (result.ok) {
+    const switched = result.switched
+      ? ` Switched from "${result.requestedModel}" — Google refused that model for this account.`
+      : "";
     return {
       id: "gemini-api",
       label: "Gemini API reachability",
       status: "pass",
-      detail: `Answered in ${result.latencyMs}ms — model "${result.model}" replied "${result.reply}".`,
+      detail: `Answered in ${result.latencyMs}ms — model "${result.model}" replied "${result.reply}".${switched}`,
       latencyMs: result.latencyMs,
-      meta: { model: result.model, reply: result.reply },
+      meta: {
+        model: result.model,
+        requestedModel: result.requestedModel,
+        switched: result.switched,
+        reply: result.reply,
+      },
     };
   }
 
@@ -273,7 +281,12 @@ async function geminiApiCheck(): Promise<HealthCheck> {
     status: "fail",
     detail: `${result.failure.kind}: ${result.failure.message}`,
     ...(result.failure.remedy ? { hint: result.failure.remedy } : {}),
-    meta: { model: result.model, retryable: result.failure.retryable },
+    meta: {
+      model: result.model,
+      requestedModel: result.requestedModel,
+      retryable: result.failure.retryable,
+      attempts: result.attempts.map((attempt) => attempt.model).join(", "),
+    },
   };
 }
 
