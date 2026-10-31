@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Activity, AudioLines, Download, PanelRight, Settings2 } from "lucide-react";
+import { Activity } from "lucide-react";
 
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
+import { NexAIMark } from "@/components/assistant/AiLogos";
 import { StylePanel } from "@/components/layout/StylePanel";
-import { ThemeSwitcher } from "@/components/layout/ThemeSwitcher";
+import { TranStudioMark } from "@/components/layout/TranStudioLogo";
 import { ViewModeSwitch } from "@/components/layout/ViewModeSwitch";
+import { ExportMenu } from "@/components/export/ExportMenu";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 
 /**
@@ -17,7 +19,6 @@ import { useSettingsStore } from "@/stores/useSettingsStore";
 export function StudioHeader() {
   const sidebarOpen = useSettingsStore((s) => s.sidebarOpen);
   const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
-  const exportReady = false; // Step 5 wires the export menu in.
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-canvas/72 backdrop-blur-xl backdrop-saturate-150">
@@ -30,7 +31,8 @@ export function StudioHeader() {
               animate={{ opacity: [0.35, 0.8, 0.35] }}
               transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
             />
-            <AudioLines className="relative h-4 w-4 text-accent" />
+            {/* Book only — the name is already written beside it. */}
+            <TranStudioMark className="relative h-[26px] w-[26px]" />
           </span>
           <span className="flex flex-col leading-none">
             <span className="text-gradient text-[15px] font-bold tracking-tight">
@@ -53,17 +55,10 @@ export function StudioHeader() {
 
         {/* ── Actions ───────────────────────────────────────────────────── */}
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            disabled={!exportReady}
-            title="Export transcript (Step 5)"
-            className="btn hidden h-9 gap-2 border border-line px-2.5 sm:flex"
-          >
-            <Download className="h-3.5 w-3.5" />
-            <span className="text-[12.5px]">Export</span>
-          </button>
+          <div className="hidden sm:block">
+            <ExportMenu />
+          </div>
 
-          <ThemeSwitcher />
           <StylePanel />
 
           <Link
@@ -78,19 +73,15 @@ export function StudioHeader() {
             type="button"
             onClick={toggleSidebar}
             aria-pressed={sidebarOpen}
-            title="Assistant panel"
-            className="btn btn-icon h-9 w-9 border border-line"
+            title="NexAI — find viral clips and ask about the video"
+            aria-label="NexAI assistant"
+            data-nexai-toggle
+            className="btn h-9 gap-1.5 border border-line px-2 sm:px-2.5"
           >
-            <PanelRight className="h-4 w-4" />
+            <NexAIMark className="h-4 w-4" />
+            <span className="hidden text-[12px] font-semibold sm:inline">NexAI</span>
           </button>
 
-          <button
-            type="button"
-            title="Studio settings (Step 3)"
-            className="btn btn-icon hidden h-9 w-9 border border-line sm:inline-flex"
-          >
-            <Settings2 className="h-4 w-4" />
-          </button>
         </div>
       </div>
     </header>

@@ -80,9 +80,8 @@ function text(body: string, status = 200) {
 const CLIENT_IDS: Record<string, string> = {
   "1": "web",
   "28": "android-vr",
-  "5": "ios",
-  "3": "android",
   "56": "web-embedded",
+  "85": "tv-embedded",
 };
 
 function clientOf(init?: RequestInit): string {
@@ -422,6 +421,37 @@ describe("fetchCaptionsDirect — failure paths", () => {
     if (result.ok) return;
     expect(result.environmentFailure).toBe(false);
     expect(result.videoUnavailable).toBeTruthy();
+    expect(result.diagnostics.some((entry) => entry.strategy === "diagnosis")).toBe(false);
+  });
+
+  it("does not report a challenged IP's 'unavailable' verdict as a fault of the video", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch((url, init) => {
+        if (url.includes("/youtubei/v1/player")) {
+          // One identity is walled; another is told the video is gone. That
+          // second answer is how YouTube disguises a datacenter block.
+          return clientOf(init) === "android-vr"
+            ? json(playerResponse({ status: "UNPLAYABLE", reason: "This video is unavailable" }))
+            : json(
+                playerResponse({
+                  status: "LOGIN_REQUIRED",
+                  reason: "Sign in to confirm you're not a bot",
+                }),
+              );
+        }
+        return text("<html>consent wall</html>");
+      }),
+    );
+
+    const result = await fetchCaptionsDirect("dQw4w9WgXcQ");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+
+    expect(result.videoUnavailable).toBeUndefined();
+    expect(result.environmentFailure).toBe(true);
+    expect(result.diagnostics.some((entry) => entry.strategy === "diagnosis")).toBe(true);
+    expect(result.diagnostics.some((entry) => /ignored an apparent/i.test(entry.detail))).toBe(true);
   });
 
   it("never throws, whatever the network does", async () => {

@@ -200,7 +200,13 @@ export function clearPreferencesCookie(): void {
  * cookie name is fixed, so the incoming key is ignored by design.
  */
 export const preferencesStorage = {
-  getItem: (): string | null => readPreferencesCookie() ?? null,
+  // The cookie is written percent-encoded; zustand JSON.parses whatever we
+  // return, so decode first — otherwise hydration silently failed and the
+  // client reset every saved preference to the defaults after first paint.
+  getItem: (): string | null => {
+    const raw = readPreferencesCookie();
+    return raw ? safeDecode(raw) : null;
+  },
   setItem: (_name: string, value: string): void => writePreferencesCookie(value),
   removeItem: (): void => clearPreferencesCookie(),
 };

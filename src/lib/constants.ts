@@ -27,30 +27,39 @@ export const THEMES: ThemeDefinition[] = [
     id: "oled",
     label: "Pure OLED",
     tagline: "True black. Zero glare. Maximum focus.",
+    detail: "A quiet, pixel-saving reading room for late-night focus.",
     scheme: "dark",
     swatch: ["#000000", "#121218", "#8b93ff"],
+    ink: "#ffffff",
   },
   {
     id: "cyberpunk",
     label: "Cyberpunk",
     tagline: "Neon magenta + electric cyan on midnight chrome.",
+    detail: "A kinetic studio treatment for clips, cuts and bold ideas.",
     scheme: "dark",
     swatch: ["#06030d", "#ff2fb9", "#22d3ee"],
+    ink: "#ff5fcb",
   },
   {
     id: "glass",
-    label: "Aurora Glass",
+    label: "Liquid Glass (Definitly not inspired 😶)",
     tagline: "Frosted panels floating over living gradients.",
+    detail: "The richest treatment: animated aurora, deep blur and layered depth.",
+    warning: "May Lag on Your PC.",
     scheme: "dark",
     swatch: ["#070b1a", "#7c5cff", "#22d3ee"],
+    ink: "#e9e4ff",
     signature: true,
   },
   {
     id: "zen",
-    label: "Zen Paper",
+    label: "Zen Paper (Mubashir's Fav.)",
     tagline: "Warm ink on cream paper. Distraction-free reading.",
+    detail: "The default reading desk: tactile paper, calm contrast and warm ink.",
     scheme: "light",
     swatch: ["#f6f0e4", "#2f2a23", "#b0562c"],
+    ink: "#2f2a23",
   },
 ];
 
@@ -362,9 +371,20 @@ export const EXPORT_PRESETS: ExportPreset[] = [
 /* ─────────────────────────────── Gemini ─────────────────────────────────── */
 
 export const GEMINI = {
-  /** Free tier, 1M-token context, generous daily quota, no credit card. */
-  defaultModel: "gemini-2.5-flash",
-  fallbackModel: "gemini-2.5-flash-lite",
+  /**
+   * Preferred model: free tier, 1M-token context, generous daily quota, no
+   * credit card. Kept as the default because it is the one this project is
+   * written for — but Google can retire a model for *new* accounts while it
+   * keeps working for older ones, so nothing here assumes it will answer.
+   */
+  defaultModel: "gemini-flash-latest",
+  fallbackModel: "gemini-flash-lite-latest",
+  /**
+   * Last-resort names, used only when ListModels discovery is unreachable.
+   * Normally the app asks Google which models this key can call and ranks
+   * those (see `lib/gemini/models.ts`), so nothing here has to stay current.
+   */
+  modelFallbacks: ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
   /** Model auto-detected via ListModels is cached this long. */
   modelCacheTtlMs: 10 * 60 * 1000,
   temperature: { chat: 0.7, clips: 0.55, summary: 0.4 },
@@ -383,6 +403,31 @@ export const PLAYBACK = {
   clipEndPadding: 0.35,
   /** How long the "copied" confirmation stays on screen. */
   copyFeedbackMs: 1400,
+} as const;
+
+/* ───────────────────────────── Follow along ─────────────────────────────── */
+
+export const FOLLOW = {
+  /**
+   * How long a programmatic scroll owns the rail (ms). Scroll events inside
+   * this window are ours, not the reader's.
+   */
+  settleMs: 760,
+  /**
+   * Grace after "Resume following" (ms) before another gesture counts as a
+   * takeover — a trackpad keeps firing momentum events for a moment.
+   */
+  resumeGraceMs: 700,
+  /** How far the rail may drift from where we parked it (px). */
+  driftTolerance: 24,
+  /**
+   * Extra passes after a long jump. `content-visibility: auto` lets the
+   * browser measure a never-painted line from its placeholder box, so a seek
+   * across an hour of video can land short; one or two corrections finish it.
+   */
+  maxCorrections: 2,
+  /** Gap between those passes (ms) — long enough to measure, short enough to read as one move. */
+  correctionMs: 140,
 } as const;
 
 /* ──────────────────────────── App defaults ──────────────────────────────── */
@@ -422,10 +467,6 @@ export const PREFERENCES_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 export const STORAGE_KEYS = {
   chat: "transtudio.chat.v1",
 } as const;
-
-/* ──────────────────────────── Input helpers ─────────────────────────────── */
-
-export const DEMO_URL = "https://www.youtube.com/watch?v=aircAruvnKk";
 
 export const SUGGESTED_PROMPTS = [
   "Summarize this video in 5 bullets.",

@@ -9,6 +9,11 @@ import type { NextConfig } from "next";
  *    (Arena / E2B sandboxes, Cloud IDEs, tunneled port previews).
  */
 const nextConfig: NextConfig = {
+  // The Windows desktop target runs this same Next app locally inside Electron.
+  // Next traces the server dependencies into `.next/standalone` so the
+  // installer does not need a second Node.js installation on the user's PC.
+  output: "standalone",
+
   reactStrictMode: true,
 
   // Allow cross-origin dev asset requests from sandbox preview hosts.

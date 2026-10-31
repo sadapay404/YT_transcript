@@ -23,8 +23,14 @@ import {
 import { resolvePreferences } from "@/lib/prefs";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 
+// Absolute base for share previews. On Vercel this is the project's shortest
+// production domain (e.g. transtudio.vercel.app); elsewhere a sane default.
+const SITE_ORIGIN = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : "https://transtudio.vercel.app";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://transtudio.local"),
+  metadataBase: new URL(SITE_ORIGIN),
   title: {
     default: `${APP_NAME} — ${APP_SUBTITLE}`,
     template: `%s · ${APP_NAME}`,
@@ -42,6 +48,9 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: APP_NAME }],
   manifest: "/manifest.webmanifest",
+  // Opt-in marker for the TranStudio Connector add-on (see /extension): its
+  // page bridge only answers on pages that carry this tag.
+  other: { "transtudio-connector": "1" },
   appleWebApp: {
     capable: true,
     title: APP_NAME,

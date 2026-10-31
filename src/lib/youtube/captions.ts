@@ -290,7 +290,11 @@ async function fetchPlayerResponse(
   );
 
   if (!response.ok) {
-    throw new Error(`player HTTP ${response.status}`);
+    throw new Error(
+      response.status === 400
+        ? `player HTTP 400 — YouTube rejected this client identity (configuration, not a video problem)`
+        : `player HTTP ${response.status}`,
+    );
   }
 
   return readPlayerResponse(await response.json());
@@ -597,11 +601,31 @@ export async function fetchCaptionsDirect(
     diagnostics.length === 0 ||
     diagnostics.every((entry) => looksEnvironmental(entry.detail));
 
+  /* ── Can we trust the video verdict? ─────────────────────────────────────
+   * YouTube answers challenged IPs with a *disguised* failure: the identity
+   * that gets through reports ERROR / "This video is unavailable" even though
+   * the video plays fine in a browser. Reporting that verbatim tells people
+   * their video is deleted when the truth is "this server is blocked" — the
+   * exact misinformation this pipeline exists to avoid. So a verdict is only
+   * reported when no rung was challenged at all. */
+  const challenged = diagnostics.some((entry) => looksEnvironmental(entry.detail));
+  const trustedVerdict = challenged ? undefined : videoVerdict;
+
+  if (challenged && videoVerdict) {
+    diagnostics.push({
+      strategy: "diagnosis",
+      ok: false,
+      detail:
+        `ignored an apparent "${videoVerdict}" verdict — other identities were challenged ` +
+        `from this host, so that response describes the IP, not the video`,
+    });
+  }
+
   return {
     ok: false,
     diagnostics,
-    environmentFailure,
-    ...(videoVerdict ? { videoUnavailable: videoVerdict } : {}),
+    environmentFailure: environmentFailure || challenged,
+    ...(trustedVerdict ? { videoUnavailable: trustedVerdict } : {}),
   };
 }
 

@@ -21,8 +21,10 @@ import {
   isGeminiConfigured,
   probeGemini,
 } from "@/lib/gemini/client";
+import { isGroqConfigured } from "@/lib/ai/groq";
 import { probeTranscript } from "@/lib/youtube/probe";
 import { normalizeSegments } from "@/lib/youtube/normalize";
+import { parseYouTubeUrl } from "@/lib/utils";
 
 export const APP_VERSION = (packageJson as { version?: string }).version ?? "0.0.0";
 
@@ -191,6 +193,25 @@ function configCheck(): HealthCheck {
   };
 }
 
+/** Optional free backup provider — never a failure when it is absent. */
+function groqConfigCheck(): HealthCheck {
+  const configured = isGroqConfigured();
+  return {
+    id: "groq-key",
+    label: "Groq backup (optional)",
+    status: configured ? "pass" : "skipped",
+    detail: configured
+      ? "Configured — NexAI falls back to Groq when Gemini is busy or unavailable."
+      : "GROQ_API_KEY is not set — NexAI uses Gemini only.",
+    ...(configured
+      ? {}
+      : {
+          hint:
+            "Optional: add GROQ_API_KEY (free, no card) where GEMINI_API_KEY lives, then redeploy/restart.",
+        }),
+  };
+}
+
 /**
  * Deterministic self-test of the timestamp normaliser. This runs the exact
  * shipped code path against known fixtures, so a broken bundle or a bad
@@ -257,13 +278,21 @@ async function geminiApiCheck(): Promise<HealthCheck> {
 
   const result = await probeGemini();
   if (result.ok) {
+    const switched = result.switched
+      ? ` Switched from "${result.requestedModel}" — Google refused that model for this account.`
+      : "";
     return {
       id: "gemini-api",
       label: "Gemini API reachability",
       status: "pass",
-      detail: `Answered in ${result.latencyMs}ms — model "${result.model}" replied "${result.reply}".`,
+      detail: `Answered in ${result.latencyMs}ms — model "${result.model}" replied "${result.reply}".${switched}`,
       latencyMs: result.latencyMs,
-      meta: { model: result.model, reply: result.reply },
+      meta: {
+        model: result.model,
+        requestedModel: result.requestedModel,
+        switched: result.switched,
+        reply: result.reply,
+      },
     };
   }
 
@@ -273,7 +302,12 @@ async function geminiApiCheck(): Promise<HealthCheck> {
     status: "fail",
     detail: `${result.failure.kind}: ${result.failure.message}`,
     ...(result.failure.remedy ? { hint: result.failure.remedy } : {}),
-    meta: { model: result.model, retryable: result.failure.retryable },
+    meta: {
+      model: result.model,
+      requestedModel: result.requestedModel,
+      retryable: result.failure.retryable,
+      attempts: result.attempts.map((attempt) => attempt.model).join(", "),
+    },
   };
 }
 
@@ -299,6 +333,39 @@ async function captionsCheck(video: string): Promise<HealthCheck> {
         ...(result.sample ? { sample: result.sample.slice(0, 120) } : {}),
         // Which identities were tried before this one succeeded — the whole
         // point of the ladder is that a blocked identity is not a dead end.
+        attempted: result.diagnostics.length,
+        ...(result.diagnostics.length > 0
+          ? { attempts: result.diagnostics.join(" · ").slice(0, 600) }
+          : {}),
+      },
+    };
+  }
+
+  const probeVideoId = parseYouTubeUrl(video)?.videoId;
+  const serverError = result.error;
+  const serverOnlyFailure =
+    probeVideoId === HEALTH_PROBE_VIDEO &&
+    serverError &&
+    ["blocked", "empty", "network", "not-found", "too-many-requests"].includes(
+      serverError.code,
+    );
+
+  if (serverOnlyFailure && serverError) {
+    return {
+      id: "youtube-captions",
+      label: "YouTube caption scraping",
+      status: "warn",
+      detail:
+        `The server runtime could not read the known-good probe (${serverError.code}: ` +
+        `${serverError.message}), so the app will use the visitor-browser fallback.`,
+      hint:
+        "This server check cannot borrow a visitor's IP. The app tries the visitor connection automatically; CORS, private videos and ordinary network failures can still require paste.",
+      latencyMs: result.latencyMs,
+      meta: {
+        videoId: result.videoId || video,
+        requested: video,
+        serverFallback: "visitor-browser",
+        ...(result.strategy ? { strategy: result.strategy } : {}),
         attempted: result.diagnostics.length,
         ...(result.diagnostics.length > 0
           ? { attempts: result.diagnostics.join(" · ").slice(0, 600) }
@@ -342,7 +409,12 @@ export async function buildHealthReport(
   const deep = options.deep ?? false;
   const video = options.video?.trim() || HEALTH_PROBE_VIDEO;
 
-  const checks: HealthCheck[] = [appShellCheck(), configCheck(), normalizerCheck()];
+  const checks: HealthCheck[] = [
+    appShellCheck(),
+    configCheck(),
+    groqConfigCheck(),
+    normalizerCheck(),
+  ];
 
   if (deep) {
     // Run both network probes concurrently — they are independent and slow.

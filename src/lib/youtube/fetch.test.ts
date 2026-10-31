@@ -230,6 +230,34 @@ describe("fetchTranscriptForUrl — environment failures", () => {
     expect(result.diagnostics?.length).toBeGreaterThan(0);
   });
 
+  it("does not treat an ignored unavailable verdict as a problem with the video", async () => {
+    fetchCaptionsDirectMock.mockResolvedValue(
+      directFailure({
+        environmentFailure: true,
+        diagnostics: [
+          { strategy: "innertube:web", ok: false, detail: "LOGIN_REQUIRED — Sign in to confirm you're not a bot" },
+          {
+            strategy: "diagnosis",
+            ok: false,
+            detail:
+              'ignored an apparent "YouTube reported the video as unavailable." verdict — other identities were challenged from this host, so that response describes the IP, not the video',
+          },
+        ],
+      }),
+    );
+    fetchTranscriptMock.mockRejectedValue(
+      Object.assign(new Error("unavailable"), { name: "YoutubeTranscriptVideoUnavailableError" }),
+    );
+
+    const result = await fetchTranscriptForUrl("https://youtu.be/dQw4w9WgXcQ", {
+      allowDemoFallback: false,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBe("blocked");
+    expect(result.message).not.toMatch(/can't be played|unavailable/i);
+  });
+
   it("reports an error instead when the demo fallback is disabled", async () => {
     fetchTranscriptMock.mockRejectedValue(networkError());
 

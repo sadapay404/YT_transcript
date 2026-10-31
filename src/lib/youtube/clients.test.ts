@@ -16,8 +16,12 @@ afterEach(() => {
 
 describe("client identities", () => {
   it("tries several identities, since YouTube reveals captions per client", () => {
-    expect(INNERTUBE_CLIENTS.length).toBeGreaterThanOrEqual(5);
     const ids = INNERTUBE_CLIENTS.map((client) => client.id);
+    expect(ids).toEqual(["web", "android-vr", "web-embedded", "tv-embedded"]);
+    // ios and android return HTTP 400 in production — a configuration failure,
+    // not a fact about the video — so they must never be on the ladder.
+    expect(ids).not.toContain("ios");
+    expect(ids).not.toContain("android");
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids[0]).toBe("web");
     // The client used for follow-up requests must be one of the ladder's own.

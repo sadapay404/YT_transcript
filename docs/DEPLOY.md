@@ -56,7 +56,7 @@ In **Settings → Environment Variables** (or on the import screen, at the botto
 | Name             | Value                | Environments                     |
 | ---------------- | -------------------- | -------------------------------- |
 | `GEMINI_API_KEY` | your key             | Production, Preview, Development |
-| `GEMINI_MODEL`   | `gemini-2.5-flash`   | optional — this is already the default |
+| `GROQ_API_KEY`   | your Groq key        | optional — fast free backup for NexAI (console.groq.com/keys) |
 
 > No key yet? Deploy anyway. The app builds and runs fine without it; only the AI
 > sidebar (Steps 4–5) is disabled, and `/status` will tell you exactly that.
@@ -249,7 +249,7 @@ redeploy).
 | `No entrypoint found in "/vercel/path0"` on a redeploy | The Production deployment was built from a commit with no app code (`main` held only the initial empty commit) | Merge the app into `main` (done), or point **Settings → Git → Production Branch** at a branch that has it. A *Redeploy* rebuilds the same empty commit, so the error repeats |
 | The production URL says **"This deployment is temporarily paused"** | A Vercel-side account/project state — typically a Hobby usage limit or a hold on the account, not your build | Open the Vercel dashboard for a banner (Project → **Usage**, or Account → **Limits**), clear it, then **Redeploy**. Nothing in this repo can cause or fix this |
 | A deployment URL asks you to log in | **Deployment Protection** (Vercel Authentication) — normal for Preview deployments | Open the production domain instead, or Project → **Settings → Deployment Protection** |
-| Captions: `blocked` / `too-many-requests` | YouTube challenged every client identity, or your host's IP range is throttled | Open `/status?deep=1` and read the **captions** check: it names the identity that answered and lists every attempt. Re-check in a few minutes, set `TRANSCRIPT_PROXY_URL`, or move host. The studio falls back to the bundled demo transcript *and says so* rather than pretending the video has no captions |
+| Captions: `blocked` / `too-many-requests` | YouTube challenged every client identity, or your host's IP range is throttled | Open `/status?deep=1` and read the **captions** check: it names the identity that answered and lists every attempt. On Vercel this is expected: visitors install the free **TranStudio Connector** add-on (`/connector`, see `docs/CONNECTOR.md`) so captions come from their own connection. Alternatively set `TRANSCRIPT_PROXY_URL`. The studio falls back to the bundled demo transcript *and says so* rather than pretending the video has no captions |
 | Captions: `empty` / `disabled` | A genuine answer about that video | YouTube reports the video's captions as disabled, or none exist yet. Try another video |
 | Gemini: `invalid-key` | Placeholder text, quotes or whitespace copied with the key | Re-paste just the key; regenerate if unsure |
 | Gemini: `quota` | Free-tier rate limit | Wait ~60s, or set `GEMINI_MODEL=gemini-2.5-flash-lite` |
@@ -317,27 +317,31 @@ for live captions set `TRANSCRIPT_PROXY_URL` (it is applied to *every* request:
 Innertube POSTs, signed and unsigned `timedtext`, and the watch page) or deploy
 somewhere with a residential-grade egress.
 
-## Renaming the project (e.g. to `transtudio.vercel.app`)
+## Getting `transtudio.vercel.app` (or any `*.vercel.app` name)
 
-The project name is independent of git: it does **not** matter which branch is
-Production, and renaming never touches commits, deployments, environment
-variables or protection settings. Only the `.vercel.app` hostnames change.
+`*.vercel.app` names are free, global and first come, first served. Renaming
+the project alone is **not** enough: Vercel doesn't promise to move the
+production address when you rename. Add the address explicitly:
 
-1. Project → **Settings → General → Project Name** → `transtudio` → Save.
-2. Production then serves **`transtudio.vercel.app`**, and branch previews become
-   `transtudio-git-<branch>-….vercel.app`. Existing deployment URLs (the ones with
-   a build hash) keep working.
-3. If the name is already taken — every `*.vercel.app` name is global — pick
-   another, or add a custom domain you own: Project → **Settings → Domains**.
-4. Update any bookmarks, and if you had shared the old preview link, share the new
-   one.
+1. Project → **Settings → Domains** → **Add Domain** → `transtudio.vercel.app`
+   → **Add**. If Vercel says it's taken, pick another name.
+2. Optional (tidier preview URLs): **Settings → General → Project Name** →
+   `transtudio` → Save. Git, env vars and deployments are unaffected.
+3. To retire the old address, open the menu next to it on the **Domains** page
+   and choose **Remove**.
+4. **Settings → Deployment Protection**: keep **Vercel Authentication** set to
+   *Standard Protection*. Old deployments then stay private to you, and only
+   the production domain is public.
+
+A domain always serves the **latest production deployment**, which means the
+newest commit on `main`.
 
 ## Environment variables (all optional except the first)
 
 ```bash
 GEMINI_API_KEY=            # free key — required for the AI sidebar (Steps 4–5)
-GEMINI_MODEL=gemini-2.5-flash        # any free-tier Gemini model id
-GEMINI_FALLBACK_MODEL=gemini-2.5-flash-lite
+GROQ_API_KEY=              # optional free backup AI (no card); used when Gemini is busy
+GEMINI_MODEL=              # optional pin; normally unset (models are auto-discovered)
 TRANSCRIPT_PROXY_URL=      # optional egress proxy for caption scraping
 TRANSTUDIO_DEMO_MODE=1     # force the bundled demo transcript (no scraping)
 ```

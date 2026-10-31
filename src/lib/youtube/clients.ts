@@ -34,11 +34,6 @@ export interface InnertubeClient {
 const CHROME_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
-const ANDROID_UA =
-  "com.google.android.youtube/19.29.37 (Linux; U; Android 14) gzip";
-
-const IOS_UA = "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 18_0 like Mac OS X)";
-
 const VR_UA = "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; GB) gzip";
 
 /** Consent + visitor cookies that make YouTube skip its interstitial. */
@@ -99,54 +94,6 @@ export const INNERTUBE_CLIENTS: InnertubeClient[] = [
     },
   },
   {
-    id: "ios",
-    label: "IOS",
-    apiKey: "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
-    clientNameId: 5,
-    headers: {
-      "content-type": "application/json",
-      "user-agent": IOS_UA,
-      "accept-language": "en-US,en;q=0.9",
-    },
-    context: {
-      client: {
-        clientName: "IOS",
-        clientVersion: "19.29.1",
-        deviceMake: "Apple",
-        deviceModel: "iPhone16,2",
-        osName: "iPhone",
-        osVersion: "18.0.0.22A3354",
-        hl: "en",
-        gl: "US",
-        userAgent: IOS_UA,
-      },
-    },
-  },
-  {
-    id: "android",
-    label: "ANDROID",
-    apiKey: "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
-    clientNameId: 3,
-    headers: {
-      "content-type": "application/json",
-      "user-agent": ANDROID_UA,
-      "accept-language": "en-US,en;q=0.9",
-      "x-goog-api-format-version": "2",
-    },
-    context: {
-      client: {
-        clientName: "ANDROID",
-        clientVersion: "19.29.37",
-        androidSdkVersion: 34,
-        osName: "Android",
-        osVersion: "14",
-        hl: "en",
-        gl: "US",
-        userAgent: ANDROID_UA,
-      },
-    },
-  },
-  {
     id: "web-embedded",
     label: "WEB_EMBEDDED_PLAYER",
     apiKey: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
@@ -167,6 +114,36 @@ export const INNERTUBE_CLIENTS: InnertubeClient[] = [
         gl: "US",
       },
       thirdParty: { embedUrl: "https://www.youtube.com/" },
+    },
+    consent: true,
+  },
+  {
+    id: "tv-embedded",
+    label: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
+    // The embedded-TV identity takes a different path through YouTube's checks,
+    // so it is worth one request when the browser-like clients are walled.
+    // ios and android are deliberately absent: both return HTTP 400 in production,
+    // which is a configuration failure, not evidence about the video.
+    apiKey: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+    clientNameId: 85,
+    headers: {
+      "content-type": "application/json",
+      "user-agent":
+        "Mozilla/5.0 (PlayStation; PlayStation 4/12.00) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
+      "accept-language": "en-US,en;q=0.9",
+      origin: "https://www.youtube.com",
+      referer: "https://www.youtube.com/tv",
+      cookie: CONSENT_COOKIE,
+    },
+    context: {
+      client: {
+        clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
+        clientVersion: "2.0",
+        clientScreen: "EMBED",
+        hl: "en",
+        gl: "US",
+      },
+      thirdParty: { embedUrl: "https://www.youtube.com/tv" },
     },
     consent: true,
   },

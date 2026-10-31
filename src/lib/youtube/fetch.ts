@@ -161,6 +161,13 @@ export async function fetchTranscriptForUrl(
   }
 
   const diagnostics: Diagnostic[] = [];
+  /**
+   * captions.ts already decided whether an "unavailable" line describes the
+   * video or this host. Trust that decision — do not re-derive it by scanning
+   * diagnostic text, which also contains verdicts we deliberately ignored.
+   */
+  let directEnvironmentFailure = false;
+  let trustedVideoUnavailable: string | undefined;
 
   /* ── 2. Primary: our own multi-client fetcher ─────────────────────────── */
   try {
@@ -227,6 +234,9 @@ export async function fetchTranscriptForUrl(
         diagnostics: describeDiagnostics(diagnostics),
       };
     }
+
+    directEnvironmentFailure = direct.environmentFailure;
+    trustedVideoUnavailable = direct.videoUnavailable;
   } catch (error) {
     diagnostics.push({
       strategy: "direct",
@@ -261,40 +271,49 @@ export async function fetchTranscriptForUrl(
   }
 
   /* ── 4. Give up — but say exactly why ────────────────────────────────── */
-  const environmental = isEnvironmental(diagnostics);
+  const environmental = directEnvironmentFailure || isEnvironmental(diagnostics);
   if (environmental && allowDemoFallback) {
     return demoResult("YouTube blocked caption requests from this server.", diagnostics);
   }
 
-  const verdict = diagnostics.find((entry) =>
-    /unavailable|private|age-restricted|not playable/i.test(entry.detail),
-  );
+  // A line that says we *ignored* an unavailable verdict must never become the
+  // verdict. Only captions.ts's trusted field, or an unchallenged diagnostic,
+  // may describe the video itself.
+  const verdict = trustedVideoUnavailable
+    ? trustedVideoUnavailable
+    : diagnostics.find(
+        (entry) =>
+          !/ignored an apparent/i.test(entry.detail) &&
+          /unavailable|private|age-restricted|not playable/i.test(entry.detail),
+      )?.detail;
 
   // Prefer the library's precise verdict when it has one: "captions disabled"
   // and "video unavailable" deserve their own message, not a generic failure.
+  // Never when the host itself was challenged — the library sees the same IP,
+  // and its "private / unavailable" answer is the disguise we just refused.
   const specific = library.classified;
   const useSpecific = specific && specific.code !== "unknown" && !environmental;
 
   return {
     ok: false,
-    error: useSpecific
-      ? specific.code
-      : verdict
-        ? "not-found"
-        : environmental
-          ? "blocked"
+    error: environmental
+      ? "blocked"
+      : useSpecific
+        ? specific.code
+        : verdict
+          ? "not-found"
           : "empty",
-    message: useSpecific
-      ? specific.message
-      : verdict
-        ? "YouTube says this video can't be played here."
-        : environmental
-          ? "This server couldn't reach YouTube's caption service."
+    message: environmental
+      ? "This server couldn't reach YouTube's caption service."
+      : useSpecific
+        ? specific.message
+        : verdict
+          ? "YouTube says this video can't be played here."
           : "No captions could be read for this video.",
-    hint: useSpecific
-      ? specific.hint
-      : environmental
-        ? "Datacenter IPs are often challenged by YouTube. Set TRANSCRIPT_PROXY_URL, deploy somewhere with a normal egress, or try again in a minute."
+    hint: environmental
+      ? "Datacenter IPs are often challenged by YouTube. Set TRANSCRIPT_PROXY_URL, deploy somewhere with a normal egress, or try again in a minute."
+      : useSpecific
+        ? specific.hint
         : "The video may have captions disabled, or only auto-captions that YouTube hasn't generated yet. Try another video, or load the demo transcript.",
     videoId: parsed.videoId,
     diagnostics: describeDiagnostics(diagnostics),

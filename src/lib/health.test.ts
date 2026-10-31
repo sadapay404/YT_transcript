@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { geminiKeyHint, readDeploymentContext } from "@/lib/health";
+const { probeTranscript } = vi.hoisted(() => ({ probeTranscript: vi.fn() }));
+vi.mock("@/lib/youtube/probe", () => ({ probeTranscript }));
+
+import { buildHealthReport, geminiKeyHint, HEALTH_PROBE_VIDEO, readDeploymentContext } from "@/lib/health";
 
 /**
  * Guards the diagnosis for "I added my API key but it isn't showing".
@@ -78,5 +81,33 @@ describe("geminiKeyHint", () => {
       expect(hint.length).toBeGreaterThan(40);
       expect(hint.trim()).toBe(hint);
     }
+  });
+});
+
+describe("caption health fallback diagnosis", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("does not call a known-good probe video broken when the Vercel IP is refused", async () => {
+    probeTranscript.mockResolvedValue({
+      ok: false,
+      videoId: HEALTH_PROBE_VIDEO,
+      segmentCount: 0,
+      diagnostics: ["✗ innertube:web — UNPLAYABLE"],
+      latencyMs: 120,
+      error: {
+        code: "not-found",
+        message: "The video is not playable.",
+        hint: "Check the link opens in a normal browser tab.",
+      },
+    });
+
+    const report = await buildHealthReport({ deep: true });
+    const captions = report.checks.find((check) => check.id === "youtube-captions");
+
+    expect(captions?.status).toBe("warn");
+    expect(captions?.detail).toMatch(/visitor-browser fallback/i);
+    expect(report.ok).toBe(true);
   });
 });

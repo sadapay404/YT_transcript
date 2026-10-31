@@ -1,20 +1,27 @@
 "use client";
 
 /**
- * The reading surface. Wraps the caption lines in a scroll container and keeps
- * the active line marked.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *  The reading surface
+ * ─────────────────────────────────────────────────────────────────────────────
+ *  Wraps the caption lines in a scroll container, keeps the spoken line marked,
+ *  and — Step 3 — keeps it in view while the video plays.
  *
- * Step 2 scope: render, timestamp badges, click-to-seek.
- * Step 3 adds the auto-scroll follow, the kinetic liquid highlight and the
- * "resume following" affordance — the pure maths for those already lives in
- * `lib/youtube/sync.ts` and is unit-tested.
+ *  The following/paused decision and every scroll measurement belong to
+ *  `useFollowAlong`; this component only renders what it reports: the liquid
+ *  wash travels between lines (Framer Motion `layoutId`), and the moment the
+ *  reader scrolls away, "Resume following" appears over the rail.
  */
-import { useMemo, useRef } from "react";
-import { AlignLeft } from "lucide-react";
+import { useCallback, useMemo } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlignLeft, ChevronsDown } from "lucide-react";
 
-import type { TranscriptSegment } from "@/lib/types";
-import { formatDuration, readingMinutes } from "@/lib/utils";
+import type { TranscriptSegment, ViralClip } from "@/lib/types";
+import { cn, formatDuration, readingMinutes } from "@/lib/utils";
 import { TranscriptLine } from "@/components/workspace/TranscriptLine";
+import { ExportMenu } from "@/components/export/ExportMenu";
+import { ViralClipsBar } from "@/components/workspace/ViralClipsBar";
+import { useFollowAlong } from "@/hooks/useFollowAlong";
 import { usePlaybackStore } from "@/stores/usePlaybackStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useTranscriptStore } from "@/stores/useTranscriptStore";
@@ -23,16 +30,68 @@ interface TranscriptPaneProps {
   className?: string;
 }
 
+/** Stable identity, so an empty transcript never re-runs the follow effect. */
+const NO_SEGMENTS: TranscriptSegment[] = [];
+
 export function TranscriptPane({ className }: TranscriptPaneProps) {
   const transcript = useTranscriptStore((s) => s.transcript);
+  const clips = useTranscriptStore((s) => s.clips);
+
   const showTimestamps = useSettingsStore((s) => s.showTimestamps);
+  const showClipHighlights = useSettingsStore((s) => s.showClipHighlights);
+  const autoScroll = useSettingsStore((s) => s.autoScroll);
+  const centerActiveLine = useSettingsStore((s) => s.centerActiveLine);
+  const reduceMotion = useSettingsStore((s) => s.reduceMotion);
+  /* Subscribed individually so moving one typography slider doesn't re-render
+     the rail for every other change — the signature below is just a string. */
+  const viewMode = useSettingsStore((s) => s.viewMode);
+  const fontFamily = useSettingsStore((s) => s.typography.fontFamily);
+  const fontSize = useSettingsStore((s) => s.typography.fontSize);
+  const lineHeight = useSettingsStore((s) => s.typography.lineHeight);
+  const letterSpacing = useSettingsStore((s) => s.typography.letterSpacing);
+  const measure = useSettingsStore((s) => s.typography.measure);
+
   const activeIndex = usePlaybackStore((s) => s.activeSegmentIndex);
+  const loopRange = usePlaybackStore((s) => s.loopRange);
+  const playbackStatus = usePlaybackStore((s) => s.status);
   const seekTo = usePlaybackStore((s) => s.seekTo);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const segments: TranscriptSegment[] = transcript?.segments ?? [];
+  const segments = transcript?.segments ?? NO_SEGMENTS;
   const forceHours = (transcript?.durationSeconds ?? 0) >= 3600;
+  const clipsBySegment = useMemo(() => {
+    const map = new Map<number, ViralClip[]>();
+    for (const clip of clips) {
+      for (const segmentId of clip.segmentIds) {
+        const current = map.get(segmentId) ?? [];
+        current.push(clip);
+        map.set(segmentId, current);
+      }
+    }
+    return map;
+  }, [clips]);
+
+  const transcriptKey = transcript ? `${transcript.videoId}@${transcript.fetchedAt}` : "empty";
+
+  const { paused, resume, containerRef } = useFollowAlong({
+    segments,
+    activeIndex,
+    enabled: autoScroll,
+    center: centerActiveLine,
+    reduceMotion,
+    // New material ⇒ following starts over, however the last read ended.
+    resetKey: transcriptKey,
+    // A reflow moves the rail legitimately; don't read it as a takeover.
+    reflowKey: `${viewMode}|${fontFamily}|${fontSize}|${lineHeight}|${letterSpacing}|${measure}`,
+  });
+
+  /** Clicking a line seeks — and always takes the rail back to the video. */
+  const handleSeek = useCallback(
+    (offset: number) => {
+      seekTo(offset);
+      resume();
+    },
+    [resume, seekTo],
+  );
 
   const stats = useMemo(() => {
     if (!transcript) return null;
@@ -45,9 +104,12 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
   }, [transcript]);
 
   return (
-    <section className={className} aria-label="Transcript">
+    <section
+      className={cn("relative flex min-h-0 flex-1 flex-col overflow-visible", className)}
+      aria-label="Transcript"
+    >
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2">
+      <header className="relative z-30 flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2">
         <div className="flex items-center gap-2">
           <AlignLeft className="h-3.5 w-3.5 text-accent" />
           <h2 className="text-[12px] font-semibold tracking-wide text-ink-soft uppercase">
@@ -65,40 +127,85 @@ export function TranscriptPane({ className }: TranscriptPaneProps) {
           {transcript?.languageLabel && (
             <span className="chip !py-0 !text-[9px]">{transcript.languageLabel}</span>
           )}
+          {viewMode === "read" && (
+            <span className="chip chip-accent !py-0 !text-[9px]">scroll inside</span>
+          )}
         </div>
 
-        {stats && (
-          <p className="font-mono text-[11px] text-ink-faint tabular-nums">
-            {stats.lines} lines · {stats.words.toLocaleString()} words · {stats.duration} ·{" "}
-            {stats.reading} min read
-          </p>
-        )}
+        <div className="flex items-center gap-2">
+          {stats && (
+            <p className="hidden font-mono text-[11px] text-ink-faint tabular-nums sm:block">
+              {stats.lines} lines · {stats.words.toLocaleString()} words · {stats.duration} ·{" "}
+              {stats.reading} min read
+            </p>
+          )}
+          {transcript && <ExportMenu compact />}
+        </div>
       </header>
 
       {/* ── Lines ──────────────────────────────────────────────────────── */}
-      <div
-        ref={scrollRef}
-        className="fade-y min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3 sm:px-3"
-      >
-        {segments.length === 0 ? (
-          <p className="px-3 py-8 text-center text-[13px] text-ink-faint">
-            No transcript loaded yet.
-          </p>
-        ) : (
-          <ol className="reading-type mx-auto flex flex-col gap-[0.35em]">
-            {segments.map((segment) => (
-              <TranscriptLine
-                key={segment.id}
-                segment={segment}
-                active={segment.id === activeIndex}
-                showTimestamp={showTimestamps}
-                forceHours={forceHours}
-                onSeek={seekTo}
-              />
-            ))}
-          </ol>
-        )}
+      {/* The wrapper is what pins "Resume following" over the rail; the rail
+          itself is the element the follow engine measures and scrolls. */}
+      <div className="relative z-0 min-h-0 flex-1">
+        <div
+          ref={containerRef}
+          data-transcript-rail
+          className="fade-y h-full overflow-y-auto overscroll-contain px-2 py-3 sm:px-3"
+        >
+          {segments.length === 0 ? (
+            <p className="px-3 py-8 text-center text-[13px] text-ink-faint">
+              No transcript loaded yet.
+            </p>
+          ) : (
+            <ol key={transcriptKey} className="reading-type mx-auto flex flex-col gap-[0.35em]">
+              {segments.map((segment, index) => (
+                <TranscriptLine
+                  key={`${transcriptKey}:${segment.id}`}
+                  segment={segment}
+                  index={index}
+                  active={index === activeIndex}
+                  showTimestamp={showTimestamps}
+                  forceHours={forceHours}
+                  reduceMotion={reduceMotion}
+                  onSeek={handleSeek}
+                  clips={showClipHighlights ? clipsBySegment.get(segment.id) ?? [] : []}
+                  clipArmed={Boolean(showClipHighlights && clipsBySegment.get(segment.id)?.some((clip) => clip.id === loopRange?.clipId))}
+                  clipPlaying={Boolean(showClipHighlights && (playbackStatus === "playing" || playbackStatus === "buffering") && clipsBySegment.get(segment.id)?.some((clip) => clip.id === loopRange?.clipId))}
+                />
+              ))}
+            </ol>
+          )}
+        </div>
+
+        {/* The reader scrolled away — one click hands the rail back. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center px-3">
+          <AnimatePresence initial={false}>
+            {paused && segments.length > 0 && (
+              <motion.button
+                key="resume-following"
+                type="button"
+                onClick={resume}
+                initial={{ opacity: 0, y: 14, scale: 0.94 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.96 }}
+                transition={
+                  reduceMotion
+                    ? { duration: 0 }
+                    : { type: "spring", stiffness: 460, damping: 34 }
+                }
+                title="Scroll the transcript back to the line being spoken"
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-line-strong bg-elevated/95 px-3.5 py-1.5 text-[12px] font-medium text-ink shadow-panel backdrop-blur-md transition-colors hover:border-accent hover:text-accent"
+              >
+                <ChevronsDown className="h-3.5 w-3.5 text-accent" />
+                Resume following
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
+
+      {/* ── NexAI's main job, one click away ─────────────────────────────── */}
+      {segments.length > 0 && <ViralClipsBar />}
     </section>
   );
 }

@@ -8,10 +8,12 @@
  * that served the request*, it correctly distinguishes "my code is broken" from
  * "this sandbox has no internet".
  */
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
   ClipboardCopy,
   CircleSlash,
@@ -112,6 +114,12 @@ export function StatusDashboard() {
 
   const headline = useMemo(() => {
     if (!report) return { text: "Running checks…", tone: "text-ink-soft" };
+    const warnings = report.checks.filter((check) => check.status === "warn").length;
+    if (report.ok && warnings > 0)
+      return {
+        text: `${warnings} check${warnings === 1 ? "" : "s"} needs attention`,
+        tone: "text-amber-700 scheme-dark:text-amber-300",
+      };
     if (report.ok)
       return {
         text: "Everything checks out",
@@ -138,6 +146,15 @@ export function StatusDashboard() {
   return (
     <div className="mx-auto w-full max-w-4xl px-4 pt-8 pb-20 sm:px-6">
       {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="mb-4">
+        <Link
+          href="/"
+          className="btn h-8 gap-1.5 border border-line px-2.5 text-[11.5px]"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to TranStudio
+        </Link>
+      </div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <span className="chip chip-accent">
@@ -298,14 +315,16 @@ export function StatusDashboard() {
             <code className="kbd">npm run dev</code>.
           </Step>
           <Step n={2}>
-            <strong className="text-ink">Captions blocked?</strong> Sandboxes, CI
-            runners and some cloud IP ranges cannot reach youtube.com. Deploy to
-            Vercel (free) or run locally — this same page will turn green there.
+            <strong className="text-ink">Captions blocked?</strong> Some cloud IP
+            ranges cannot reach YouTube. The studio automatically tries the
+            visitor&apos;s browser connection; this server-only check may show
+            <strong className="text-ink"> attention</strong> because it cannot borrow that IP.
           </Step>
           <Step n={3}>
-            <strong className="text-ink">Still failing on a host?</strong> Some
-            datacenter IPs get throttled by YouTube; set an optional{" "}
-            <code className="kbd">TRANSCRIPT_PROXY_URL</code> and retry.
+            <strong className="text-ink">Want the server rung green?</strong> Set
+            an optional <code className="kbd">TRANSCRIPT_PROXY_URL</code> to a
+            permitted egress and retry. Browser CORS can still require paste for
+            some videos.
           </Step>
           <Step n={4}>
             <strong className="text-ink">From a terminal instead?</strong>{" "}

@@ -317,8 +317,18 @@ export function YouTubePlayer({
               // A previous failure must not linger on a now-healthy player.
               setPlayerError(null);
 
-              if (startAt) event.target.seekTo(startAt, true);
-              updateTime(startAt ?? 0, event.target.getDuration() ?? 0);
+              const armedLoop = usePlaybackStore.getState().loopRange;
+              loopRef.current = armedLoop;
+              if (armedLoop) {
+                // A clip can be armed while this player was unmounted (Read
+                // mode). Adopt it before the first user-visible frame.
+                event.target.seekTo(armedLoop.start, true);
+                event.target.playVideo();
+                updateTime(armedLoop.start, event.target.getDuration() ?? 0);
+              } else {
+                if (startAt) event.target.seekTo(startAt, true);
+                updateTime(startAt ?? 0, event.target.getDuration() ?? 0);
+              }
             },
             onStateChange: (event) => {
               if (cancelled) return;
