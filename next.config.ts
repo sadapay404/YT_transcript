@@ -12,7 +12,11 @@ const nextConfig: NextConfig = {
   // The Windows desktop target runs this same Next app locally inside Electron.
   // Next traces the server dependencies into `.next/standalone` so the
   // installer does not need a second Node.js installation on the user's PC.
-  output: "standalone",
+  //
+  // On Vercel that trace is wasted work: the platform builds its own serverless
+  // output, so `standalone` is only requested for a non-Vercel build (the
+  // desktop CI job, `npm run desktop:build`, or a local build).
+  output: process.env.VERCEL ? undefined : "standalone",
 
   reactStrictMode: true,
 

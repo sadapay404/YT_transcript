@@ -63,6 +63,13 @@ npm run build && npm start
 
 ## Installable Windows app
 
+**Download page: `/app`** (linked from the header and footer). The installer itself is
+**not** in this repository and is **not** served by Vercel — Vercel's free plan rejects
+static uploads over 100 MB and this build is ~168 MB. The page links to the uploaded
+build and the stable link `/api/download/windows` redirects to it. Release details live
+in one place: [`src/lib/download.ts`](src/lib/download.ts). Publishing a new build is
+documented in **[docs/WINDOWS_DOWNLOAD.md](docs/WINDOWS_DOWNLOAD.md)**.
+
 TranStudio also has an Electron desktop target that reuses this same Next.js/React UI,
 animations, Steps 1–3, transcript data layer, AI surfaces, and paste fallback. The
 installed app starts a local standalone Next server, so transcript server actions make
@@ -123,8 +130,10 @@ src/
 │  ├─ page.tsx            # the studio (workspace)
 │  ├─ actions/
 │  │  └─ transcript.ts    # ⭐ server action: URL → full transcript payload
+│  ├─ app/page.tsx        # /app — Windows download page
 │  ├─ status/page.tsx     # diagnostics dashboard ("is it working?")
 │  ├─ api/health/route.ts # shallow + deep health JSON (monitor-friendly)
+│  ├─ api/download/windows/route.ts # stable redirect to the current installer
 │  ├─ manifest.ts         # PWA manifest
 │  └─ icon.png            # PWA / favicon icon
 ├─ lib/
@@ -276,8 +285,9 @@ npx vitest run --config vitest.verify.config.ts
 | **1** | Scaffolding, type contracts, design system, 4 themes, typography studio, motion primitives | ✅ shipped |
 | **2** | `youtube-transcript` server action + IFrame player + transcript render (click-to-seek) | ✅ shipped |
 | **3** | Sync engine: auto-scroll follow, kinetic liquid active line | ✅ shipped |
-| **4** | Gemini chat sidebar (streaming, transcript context injected silently) | ⏳ |
-| **5** | Viral Clipper: structured JSON clips → colour-coded transcript bands with copy/loop-play | ⏳ |
+| **4** | Gemini chat sidebar (streaming, transcript context injected silently) | ✅ shipped |
+| **5** | Viral Clipper: structured JSON clips → colour-coded transcript bands with copy/loop-play | ✅ shipped |
+| **6** | Windows download page `/app` (Drive-hosted installer, stable redirect link) | ✅ shipped |
 
 ---
 

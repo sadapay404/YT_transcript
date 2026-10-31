@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Activity } from "lucide-react";
+import { Activity, MonitorDown } from "lucide-react";
 
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { NexAIMark } from "@/components/assistant/AiLogos";
@@ -60,6 +60,16 @@ export function StudioHeader() {
           </div>
 
           <StylePanel />
+
+          <Link
+            href="/app"
+            title="Download the Windows app"
+            aria-label="Download the Windows app"
+            className="btn h-9 gap-1.5 border border-line px-2 sm:px-2.5"
+          >
+            <MonitorDown className="h-4 w-4" />
+            <span className="hidden text-[12px] font-semibold lg:inline">Windows</span>
+          </Link>
 
           <Link
             href="/status"

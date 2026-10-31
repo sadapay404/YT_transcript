@@ -66,24 +66,20 @@ In **Settings → Environment Variables** (or on the import screen, at the botto
 Hit **Deploy**. First build takes ~1–2 minutes. Afterwards:
 
 - **Production URL**: `https://<project>.vercel.app` — tracks your production branch (`main` by default).
-- **Preview URLs**: *every* branch and PR gets its own free URL. Because the work
-  currently lives on `arena/01a0d624-yt-transcript`, you can open
-  <https://vercel.com> → your project → **Deployments** and click the newest
-  preview to see the current build live *before* merging anything.
+- **Preview URLs**: *every* branch and PR gets its own free URL, so a change can be
+  inspected live (open **Deployments** and click the newest preview) before it lands
+  on `main`.
 
-### 5. Point production at the right branch — **required in this repo**
+### 5. Confirm the production branch
 
-Vercel's **Production Branch** defaults to `main`, and **this repo's `main` is
-still only the initial README commit** — all the app code lives on
-`arena/01a0d624-yt-transcript`. So pick one:
+`main` already contains the whole app, so the default **Production Branch: `main`**
+is correct — nothing else to change. If your project was imported from an older
+fork where `main` held only a README, see
+[No entrypoint found](#no-entrypoint-found-in-vercelpath0-set-packagejson-main-to-a-server-file-or-add-one-of-appjs-appcjs--srcappts-)
+below.
 
-- **Merge PR #1** (fast-forward, no conflicts) → `main` gets the app, and the
-  default production flow works from then on. Recommended.
-- **Or** **Settings → Git → Production Branch → `arena/01a0d624-yt-transcript`**
-  → that branch becomes the live site, nothing merged.
-
-Either way, **every branch already gets a preview URL**, so you can use the app
-live right now from the branch deployment regardless of this setting.
+The Windows download page deploys with everything else at **`/app`**; it needs no
+extra settings. See [The Windows download page](#the-windows-download-page-app).
 
 ### 6. Update the variable without redeploying from scratch
 
@@ -161,7 +157,7 @@ shallow endpoint — it returns `200` when healthy and `x-transtudio-health: ok`
 ### Locally, exactly like production
 
 ```bash
-npm run test        # 38 unit tests: URL parsing, timestamp normalising, exports
+npm run test        # 257 unit tests: captions, sync, Gemini, clips, exports, downloads
 npm run typecheck && npm run lint
 npm run build && npm start        # production build on http://localhost:3000
 open http://localhost:3000/status
@@ -182,25 +178,24 @@ missing key.
 
 **Do not add an `app.js`/`server.js` file** — that message is a symptom, not the
 problem. It means Vercel is running its *generic Node* builder instead of the
-Next.js builder. Two things cause it, and a fresh project typically has both:
+Next.js builder. Two things cause it:
 
 1. **The project's Framework Preset is `Other` (a.k.a. Node).**
    Vercel detects the framework **once, at import**, and stores the result as a
-   project setting. If the repo was imported while the default branch held only
-   a README, detection found no `package.json` and permanently saved `Other`.
+   project setting. A project imported before `package.json` existed on the
+   default branch keeps `Other` forever, even after the code arrives.
 2. **The deployed branch has no application code.**
-   This repo's `main` branch is still the one-line initial README commit — all
-   of the app lives on the `arena/01a0d624-yt-transcript` branch. Vercel's
-   **Production Branch** defaults to `main`, so it clones an empty project.
+   Check that the **Production Branch** in **Settings → Git** actually contains
+   this app (today: `main` does).
 
 #### Confirm it in 10 seconds
 
-Open **Deployments → the failed deployment → Source**. Check the commit:
+Open **Deployments → the failed deployment → Source** and check the commit:
 
 | Commit shown | Meaning | Fix |
 | ------------ | ------- | --- |
-| `1cbd757 Initial commit` | You're building the empty `main` branch | Do **step B** below |
-| Latest `arena/…` commit (e.g. `f0c6d54`) | Builder is wrong, code is fine | Do **step A** below |
+| A commit older than the app (`Initial commit`) | The deployed branch has no code | Do **step B** below |
+| The current `main` commit | Builder is wrong, code is fine | Do **step A** below |
 
 #### Step A — force the Next.js builder (already done in this repo)
 
@@ -224,13 +219,8 @@ pulling it, or fix it by hand:
 
 #### Step B — give the deployed branch the app code (pick one)
 
-- **Merge the pull request (recommended).** PR #1 merges
-  `arena/01a0d624-yt-transcript` → `main`. It is a fast-forward (no conflicts),
-  so `main` gains the whole app and the normal production flow just works.
-- **Or change the production branch.** **Settings → Git → Production
-  Branch → `arena/01a0d624-yt-transcript`**. Nothing gets merged, and that
-  branch becomes your live site. Useful if you want the site live *before*
-  deciding to merge.
+- **Fix the production branch.** **Settings → Git → Production Branch** → a
+  branch that contains this app (`main`). Redeploy.
 - **Or start clean.** Delete the Vercel project and re-import now that the code
   is on `main` — detection then nails Next.js on the first try.
 
@@ -349,6 +339,32 @@ TRANSTUDIO_DEMO_MODE=1     # force the bundled demo transcript (no scraping)
 See `.env.example` for the annotated list.
 
 ---
+
+## The Windows download page (`/app`)
+
+`/app` is a normal page in this app — it deploys with everything else and needs no
+configuration. It shows the version, size, install steps, SmartScreen note and FAQ for
+the desktop build, and links to wherever that build is hosted.
+
+**The installer is not in this repo and not on Vercel.** The free (Hobby) plan rejects
+static file uploads over **100 MB**, and the Windows archive is ~168 MB. So:
+
+- the build lives in Google Drive (or a GitHub Release);
+- `src/lib/download.ts` holds the file id, version and size;
+- `/api/download/windows` redirects to it, which gives you one stable link to share.
+
+Releasing a new build (including the sharing step that makes the button work for
+strangers) is documented in **[WINDOWS_DOWNLOAD.md](WINDOWS_DOWNLOAD.md)**.
+
+Quick check after deploying:
+
+```bash
+curl -sI https://your-app.vercel.app/api/download/windows | grep -i location
+# → location: https://drive.google.com/uc?export=download&id=…&confirm=t
+```
+
+If the browser lands on a Google sign-in page instead of a download, the Drive file
+is still private — set its sharing to **Anyone with the link → Viewer**.
 
 ## PWA, domain and cost hygiene
 

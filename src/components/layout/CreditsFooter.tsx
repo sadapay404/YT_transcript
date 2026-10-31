@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { MonitorDown } from "lucide-react";
+
 import { TranStudioWordmark } from "@/components/layout/TranStudioLogo";
 
 const CREDITS = ["Idea By:", "Design By:", "Executed By:"] as const;
@@ -18,6 +21,15 @@ export function CreditsFooter() {
               Mubashir
             </p>
           ))}
+
+          {/* The download page is never more than one click away. */}
+          <Link
+            href="/app"
+            className="flex items-center gap-1.5 font-medium text-ink-soft transition-colors hover:text-ink"
+          >
+            <MonitorDown className="h-3.5 w-3.5" />
+            Windows app
+          </Link>
         </div>
       </div>
     </footer>
