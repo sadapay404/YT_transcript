@@ -1,21 +1,20 @@
 /**
  * `GET /api/download/windows` — the stable Windows download link.
  *
- * Redirects to wherever `WINDOWS_RELEASE` currently points (Google Drive
- * today; a GitHub Release later, without changing a single shared link).
- * Kept dynamic so the redirect is never cached across a release bump.
+ * The `/app` button points straight at the GitHub Release asset (a direct
+ * file). This route exists for printed/shared short links: it 307s to whatever
+ * `WINDOWS_RELEASE` currently points at, so the same URL survives a version
+ * bump or a host change.
  */
-import {
-  WINDOWS_RELEASE,
-  hasWindowsDownload,
-  windowsDownloadUrl,
-} from "@/lib/download";
+import { windowsDownloadUrl } from "@/lib/download";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET() {
-  if (!hasWindowsDownload()) {
+  const target = windowsDownloadUrl();
+
+  if (!target) {
     return Response.json(
       {
         ok: false,
@@ -29,7 +28,7 @@ export async function GET() {
   return new Response(null, {
     status: 307,
     headers: {
-      location: windowsDownloadUrl(WINDOWS_RELEASE),
+      location: target,
       "cache-control": "no-store, max-age=0",
     },
   });

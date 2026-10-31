@@ -20,12 +20,13 @@ import {
 } from "lucide-react";
 
 import {
-  WINDOWS_DOWNLOAD_PATH,
   WINDOWS_RELEASE,
   driveViewUrl,
   formatBytes,
   formatReleaseDate,
-  hasWindowsDownload,
+  isDirectDownload,
+  releasePageUrl,
+  windowsDownloadUrl,
 } from "@/lib/download";
 
 const HEADLINE = ["Read", "it.", "Clip", "it.", "Ship", "it."];
@@ -62,7 +63,10 @@ const FAQ = [
 
 export function WindowsAppPage() {
   const release = WINDOWS_RELEASE;
-  const available = hasWindowsDownload(release);
+  // A GitHub Release asset is a direct file, so the button links straight to it.
+  const href = windowsDownloadUrl(release);
+  const available = href !== null;
+  const direct = isDirectDownload(release);
 
   return (
     <main className="mx-auto w-full max-w-[1400px] px-4 pt-10 pb-20 sm:px-6">
@@ -117,8 +121,10 @@ export function WindowsAppPage() {
         >
           {available ? (
             <a
-              href={WINDOWS_DOWNLOAD_PATH}
+              href={href}
               data-app-download
+              {...(direct ? { download: release.fileName } : {})}
+              rel="noreferrer noopener"
               className="btn btn-primary h-12 w-full gap-2 px-6 text-[14px] sm:w-auto"
             >
               <Download className="h-4 w-4" />
@@ -152,7 +158,19 @@ export function WindowsAppPage() {
             Unsigned build — SmartScreen asks once
           </span>
           <span>Released {formatReleaseDate(release.releasedAt)}</span>
-          {available && release.driveFileId.trim().length > 0 && (
+          {direct && (
+            <a
+              href={releasePageUrl(release.tag)}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-1.5 transition-colors hover:text-ink"
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+              Release notes &amp; older builds
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+          {!direct && release.driveFileId.trim().length > 0 && (
             <a
               href={driveViewUrl(release.driveFileId)}
               target="_blank"

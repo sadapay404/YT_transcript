@@ -8,6 +8,9 @@ import {
   formatBytes,
   formatReleaseDate,
   hasWindowsDownload,
+  isDirectDownload,
+  releaseAssetUrl,
+  releasePageUrl,
   windowsDownloadUrl,
 } from "./download";
 
@@ -28,7 +31,50 @@ describe("formatBytes", () => {
   });
 });
 
-describe("Drive links", () => {
+describe("download target", () => {
+  const directUrl = releaseAssetUrl("v0.1.0", "TranStudio-Setup-0.1.0.exe");
+
+  it("builds a direct GitHub Releases asset URL", () => {
+    expect(directUrl).toBe(
+      "https://github.com/sadapay404/YT_transcript/releases/download/v0.1.0/TranStudio-Setup-0.1.0.exe",
+    );
+  });
+
+  it("links straight at the asset, with no redirect in between", () => {
+    const release = { ...WINDOWS_RELEASE, downloadUrl: directUrl };
+    expect(windowsDownloadUrl(release)).toBe(directUrl);
+    expect(isDirectDownload(release)).toBe(true);
+    expect(hasWindowsDownload(release)).toBe(true);
+  });
+
+  it("falls back to the Drive mirror only when no direct URL is published", () => {
+    const release = { ...WINDOWS_RELEASE, downloadUrl: null, driveFileId: "abc123" };
+    expect(windowsDownloadUrl(release)).toBe(driveDownloadUrl("abc123"));
+    expect(isDirectDownload(release)).toBe(false);
+  });
+
+  it("reports no download at all rather than a dead link", () => {
+    const release = { ...WINDOWS_RELEASE, downloadUrl: null, driveFileId: "  " };
+    expect(windowsDownloadUrl(release)).toBeNull();
+    expect(hasWindowsDownload(release)).toBe(false);
+  });
+
+  it("escapes file names in asset URLs", () => {
+    expect(releaseAssetUrl("v1", "a b.exe")).toContain("a%20b.exe");
+  });
+
+  it("keeps the shared short link pointing at this site", () => {
+    expect(WINDOWS_DOWNLOAD_PATH).toBe("/api/download/windows");
+  });
+
+  it("points the release-notes link at the tag page", () => {
+    expect(releasePageUrl("v0.1.0")).toBe(
+      "https://github.com/sadapay404/YT_transcript/releases/tag/v0.1.0",
+    );
+  });
+});
+
+describe("Drive mirror links", () => {
   it("builds a download URL that skips the viewer page", () => {
     expect(driveDownloadUrl("abc123")).toBe(
       "https://drive.google.com/uc?export=download&id=abc123&confirm=t",
@@ -45,26 +91,14 @@ describe("Drive links", () => {
 });
 
 describe("WINDOWS_RELEASE", () => {
-  it("is considered available once a Drive file id is set", () => {
-    expect(hasWindowsDownload()).toBe(true);
-    expect(hasWindowsDownload({ ...WINDOWS_RELEASE, driveFileId: "  " })).toBe(false);
-  });
-
-  it("points the stable download path at this site", () => {
-    expect(WINDOWS_DOWNLOAD_PATH).toBe("/api/download/windows");
-  });
-
-  it("prefers an explicit external URL, then falls back to Drive", () => {
-    const external = "https://github.com/owner/repo/releases/download/v0.1.0/app.exe";
-    expect(windowsDownloadUrl({ ...WINDOWS_RELEASE, externalUrl: external })).toBe(external);
-    expect(windowsDownloadUrl({ ...WINDOWS_RELEASE, externalUrl: "  " })).toBe(
-      driveDownloadUrl(WINDOWS_RELEASE.driveFileId),
-    );
-  });
-
   it("downloads a single .exe and advertises a real file size", () => {
     expect(WINDOWS_RELEASE.fileName.endsWith(".exe")).toBe(true);
     expect(WINDOWS_RELEASE.sizeBytes).toBeGreaterThan(0);
+  });
+
+  it("keeps the version, tag and asset name in step", () => {
+    expect(WINDOWS_RELEASE.tag).toBe(`v${WINDOWS_RELEASE.version}`);
+    expect(WINDOWS_RELEASE.fileName).toContain(WINDOWS_RELEASE.version);
   });
 });
 
