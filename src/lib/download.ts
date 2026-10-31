@@ -73,9 +73,10 @@ export const WINDOWS_RELEASE: WindowsRelease = {
   version: "0.1.0",
   tag: "v0.1.0",
   fileName: "TranStudio-Setup-0.1.0.exe",
-  sizeBytes: 175_959_790,
+  sizeBytes: 175_901_960,
   releasedAt: "2026-10-31",
-  downloadUrl: null,
+  downloadUrl: releaseAssetUrl("v0.1.0", "TranStudio-Setup-0.1.0.exe"),
+  // Optional mirror; not shown while `downloadUrl` is set.
   driveFileId: "1FX9iGKNkZKgqbHCzarlLv3XlnOy8xmzD",
   minimumWindows: "Windows 10 or 11 (64-bit)",
   // Estimate: the Electron runtime plus the traced standalone Next server.
