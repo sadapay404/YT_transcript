@@ -1,24 +1,22 @@
+"use client";
+
 /**
- * /app — "TranStudio for Windows": what the desktop build is, what it fixes,
- * how to install it, and the download itself.
+ * /app — "TranStudio for Windows".
  *
- * Server component: the page is static, carries no keys, and the download
- * button points at `/api/download/windows`, which redirects to the current
- * release (see `src/lib/download.ts`).
+ * Deliberately mirrors the landing hero (`LandingView`): the same kinetic
+ * "Read it. Clip it. Ship it." headline and the same centred column, but where
+ * the home page offers a URL bar this page offers the download button — and a
+ * way back home.
  */
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
-  ArrowRight,
   CheckCircle2,
-  Cpu,
   Download,
   ExternalLink,
   FolderOpen,
-  Info,
-  MonitorDown,
   ShieldAlert,
-  Wifi,
 } from "lucide-react";
 
 import {
@@ -29,65 +27,36 @@ import {
   formatReleaseDate,
   hasWindowsDownload,
 } from "@/lib/download";
-import { APP_TAGLINE } from "@/lib/constants";
 
-const REASONS = [
-  {
-    icon: Wifi,
-    title: "Captions from your connection",
-    body: "The hosted site is refused by YouTube on cloud IP ranges. The desktop app runs on your PC, so caption requests leave from your home network instead — the same reason the Connector add-on works.",
-  },
-  {
-    icon: Cpu,
-    title: "No server in the middle",
-    body: "Transcript scraping and AI calls happen locally, so there is no shared free-tier quota to exhaust and no cold start before the first transcript.",
-  },
-  {
-    icon: MonitorDown,
-    title: "The same studio, unchanged",
-    body: "Player, synced transcript, follow-along, themes, Typography Studio, exports and NexAI are the same React code — the installer wraps the web app in a window, not a rewrite.",
-  },
-] as const;
+const HEADLINE = ["Read", "it.", "Clip", "it.", "Ship", "it."];
 
 const STEPS = [
   {
     title: "Download the installer",
-    body: `One ${formatBytes(WINDOWS_RELEASE.sizeBytes)} .exe — no zip to extract. Chrome or Edge may ask where to save it; Windows may warn about the download because the file is unsigned.`,
+    body: `One ${formatBytes(WINDOWS_RELEASE.sizeBytes)} .exe — no zip, nothing else to install.`,
   },
   {
     title: `Run ${WINDOWS_RELEASE.fileName}`,
-    body: "The NSIS installer lets you pick the install folder and creates Start-menu and desktop shortcuts. Nothing else needs installing — the local Next.js server ships inside the app.",
+    body: "Pick a folder, finish the wizard. Start-menu and desktop shortcuts are created for you.",
   },
   {
     title: "Get past SmartScreen once",
-    body: "The build is not code-signed, so Windows shows “Windows protected your PC”. Click More info → Run anyway. Only do this for a build you trust.",
+    body: "The build is unsigned, so Windows shows “Windows protected your PC” → More info → Run anyway.",
   },
 ] as const;
 
 const FAQ = [
   {
-    q: "Windows says the publisher is unknown. Is that expected?",
-    a: "Yes. The installer is unsigned — a code-signing certificate costs money and this project is free to run. Unsigned means Windows cannot prove who built it, not that anything is wrong with it. Click More info → Run anyway, or don't install it — the web app stays available either way.",
+    q: "Why does Windows warn about the file?",
+    a: "The installer is unsigned — a code-signing certificate costs money and this project is free. Unsigned means Windows cannot prove who built it, not that something is wrong with it. If you would rather not trust a binary, the web app does the same job in a tab.",
   },
   {
-    q: "Do I need Node.js or any other software installed?",
-    a: "No. The installer carries the local Next.js server and its dependencies, so there is nothing else to install. It starts the server on a loopback port when the app opens and stops it when the app closes.",
+    q: "Do I need Node.js or a Gemini key?",
+    a: "No Node.js — the local server ships inside the app. The AI key is optional: transcripts, exports and the player work without one.",
   },
   {
-    q: "Where does the AI key come from?",
-    a: "A build may ship with a built-in free-tier key so NexAI works out of the box. You can always use your own: create %APPDATA%\\TranStudio\\.env.local with GEMINI_API_KEY=… and restart. Your file wins over the built-in key. Transcripts, exports and the player never need a key.",
-  },
-  {
-    q: "Does it work offline?",
-    a: "Reading a transcript you already loaded works offline. Loading a new video needs the internet: the transcript comes from YouTube and the player is YouTube's iframe.",
-  },
-  {
-    q: "Is the web version going away?",
-    a: "No. The website and the desktop app are separate targets built from the same code. The site is the fastest way to try TranStudio; the app is for people whose network the site cannot reach.",
-  },
-  {
-    q: "How do I uninstall it?",
-    a: "Settings → Apps → Installed apps → TranStudio → Uninstall. Your preferences and the optional .env.local file under %APPDATA%\\TranStudio are left in place; delete that folder if you want them gone.",
+    q: "Does it replace the website?",
+    a: "No. Both are built from the same code. The app exists because YouTube blocks caption requests from cloud IPs; on your PC the request leaves from your own network.",
   },
 ] as const;
 
@@ -96,86 +65,157 @@ export function WindowsAppPage() {
   const available = hasWindowsDownload(release);
 
   return (
-    <main className="mx-auto w-full max-w-[1100px] px-4 pt-8 pb-20 sm:px-6">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-faint transition-colors hover:text-ink"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Back to the studio
-      </Link>
+    <main className="mx-auto w-full max-w-[1400px] px-4 pt-10 pb-20 sm:px-6">
+      {/* ── Hero — the landing lockup, with a download instead of a URL bar ── */}
+      <section className="flex flex-col items-center text-center">
+        <motion.p
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-4 inline-flex items-center gap-2 rounded-full border border-line px-3 py-1 text-[11px] font-semibold tracking-[0.12em] text-ink-soft uppercase"
+        >
+          Windows app · v{release.version} · {formatBytes(release.sizeBytes)}
+        </motion.p>
 
-      {/* ── Hero + download ─────────────────────────────────────────────── */}
-      <section className="panel mt-4 overflow-hidden p-5 sm:p-7">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="text-[11px] font-semibold tracking-[0.16em] text-accent uppercase">
-              Windows app · {release.minimumWindows}
-            </p>
-            <h1 className="mt-2 text-3xl leading-[1.08] font-black tracking-tight text-ink sm:text-5xl">
-              TranStudio <span className="text-gradient">for Windows</span>
-            </h1>
-            <p className="mt-3 text-[14px] leading-relaxed text-ink-soft">
-              The whole studio in a native window, running on your own machine.
-              It uses your network for YouTube captions — which is exactly what
-              the hosted website cannot do from a cloud IP.
-            </p>
-            <p className="mt-2 text-[12px] text-ink-faint">{APP_TAGLINE}</p>
+        <h1 className="text-4xl leading-[1.05] font-black tracking-tight sm:text-6xl lg:text-7xl">
+          {HEADLINE.map((word, index) => (
+            <motion.span
+              key={word + index}
+              initial={{ opacity: 0, y: 24, filter: "blur(12px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              transition={{
+                delay: 0.08 * index,
+                duration: 0.7,
+                ease: [0.22, 1, 0.36, 1],
+              }}
+              className={`mr-[0.28em] inline-block ${
+                index % 2 === 1 ? "text-gradient" : "text-ink"
+              }`}
+            >
+              {word}
+            </motion.span>
+          ))}
+        </h1>
 
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              {available ? (
-                <a
-                  href={WINDOWS_DOWNLOAD_PATH}
-                  data-windows-download
-                  className="btn btn-primary h-11 gap-2 px-4 text-[13px]"
-                >
-                  <Download className="h-4 w-4" />
-                  Download for Windows
-                </a>
-              ) : (
-                <span className="btn h-11 cursor-not-allowed gap-2 border border-line px-4 text-[13px] text-ink-faint">
-                  <Download className="h-4 w-4" />
-                  Build not published yet
-                </span>
-              )}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="mt-5 max-w-2xl text-[15px] leading-relaxed text-ink-soft"
+        >
+          The whole studio as a Windows app — same player, same synced
+          transcript, same NexAI. It runs on your PC, so YouTube captions come
+          from your own connection instead of a cloud server that YouTube
+          refuses.
+        </motion.p>
 
-              {available && release.driveFileId.trim().length > 0 && (
-                <a
-                  href={driveViewUrl(release.driveFileId)}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="btn h-11 gap-2 border border-line px-4 text-[13px]"
-                >
-                  <FolderOpen className="h-4 w-4" />
-                  Google Drive copy
-                  <ExternalLink className="h-3 w-3 text-ink-faint" />
-                </a>
-              )}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.55, type: "spring", stiffness: 260, damping: 28 }}
+          className="mt-8 flex w-full max-w-2xl flex-col items-center justify-center gap-2.5 sm:flex-row"
+        >
+          {available ? (
+            <a
+              href={WINDOWS_DOWNLOAD_PATH}
+              data-app-download
+              className="btn btn-primary h-12 w-full gap-2 px-6 text-[14px] sm:w-auto"
+            >
+              <Download className="h-4 w-4" />
+              Download for Windows
+            </a>
+          ) : (
+            <span className="btn h-12 w-full cursor-not-allowed gap-2 border border-line px-6 text-[14px] text-ink-faint sm:w-auto">
+              <Download className="h-4 w-4" />
+              Build not published yet
+            </span>
+          )}
 
-              <Link href="/" className="btn h-11 gap-2 border border-line px-4 text-[13px]">
-                Use the web app
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
+          <Link
+            href="/"
+            className="btn h-12 w-full gap-2 border border-line px-6 text-[14px] sm:w-auto"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to home
+          </Link>
+        </motion.div>
 
-            <dl className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-[12px]">
-              <Meta label="Version" value={`v${release.version}`} />
-              <Meta label="Installer" value={`${formatBytes(release.sizeBytes)} · .exe`} />
-              <Meta label="Released" value={formatReleaseDate(release.releasedAt)} />
-              <Meta label="Installed" value={release.installedSize} />
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.75 }}
+          className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-[12px] text-ink-faint"
+        >
+          <span>{release.minimumWindows}</span>
+          <span className="flex items-center gap-1.5">
+            <ShieldAlert className="h-3.5 w-3.5" />
+            Unsigned build — SmartScreen asks once
+          </span>
+          <span>Released {formatReleaseDate(release.releasedAt)}</span>
+          {available && release.driveFileId.trim().length > 0 && (
+            <a
+              href={driveViewUrl(release.driveFileId)}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-1.5 transition-colors hover:text-ink"
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+              Google Drive copy
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </motion.div>
+      </section>
+
+      {/* ── Install ──────────────────────────────────────────────────────── */}
+      <section className="mt-14">
+        <p className="text-center text-[11px] font-semibold tracking-[0.16em] text-accent uppercase">
+          Three steps
+        </p>
+        <h2 className="mt-1.5 text-center text-2xl font-bold tracking-tight text-ink sm:text-[28px]">
+          Install it in a minute
+        </h2>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          {STEPS.map((step, index) => (
+            <motion.div
+              key={step.title}
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-40px" }}
+              transition={{ delay: index * 0.06, duration: 0.45 }}
+              className="panel p-4"
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-line-strong bg-ink/[0.06] text-[11px] font-bold text-accent">
+                {index + 1}
+              </span>
+              <h3 className="mt-2.5 text-[14px] font-semibold text-ink">{step.title}</h3>
+              <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-soft">{step.body}</p>
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="panel p-5">
+            <h3 className="text-[15px] font-semibold text-ink">What it needs</h3>
+            <dl className="mt-3 divide-y divide-line">
+              <Row label="Windows" value={release.minimumWindows} />
+              <Row
+                label="Disk"
+                value={`${release.installedSize} (installer ${formatBytes(release.sizeBytes)})`}
+              />
+              <Row label="Node.js" value="Not required — bundled" />
+              <Row label="API key" value="Optional" />
             </dl>
           </div>
 
-          {/* A quick "what you get" card keeps the hero from being one long column. */}
-          <aside className="w-full shrink-0 rounded-panel border border-line bg-ink/[0.03] p-4 lg:w-[300px]">
-            <p className="text-[11px] font-semibold tracking-[0.14em] text-accent uppercase">
-              In the box
-            </p>
-            <ul className="mt-2.5 space-y-2 text-[12.5px] text-ink-soft">
+          <div className="panel p-5">
+            <h3 className="text-[15px] font-semibold text-ink">In the box</h3>
+            <ul className="mt-3 space-y-2 text-[12.5px] text-ink-soft">
               {[
                 "Synced transcript + player",
-                "Follow-along reading",
-                "NexAI clips & summaries",
+                "Follow-along reading and search",
+                "NexAI clips, summaries and chapters",
                 "txt · md · srt · vtt · json · csv exports",
                 "4 themes, 3 reading fonts",
               ].map((item) => (
@@ -185,144 +225,28 @@ export function WindowsAppPage() {
                 </li>
               ))}
             </ul>
-            {release.unsigned && (
-              <p className="mt-3 flex items-start gap-2 border-t border-line pt-3 text-[11.5px] leading-relaxed text-ink-faint">
-                <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Unsigned build: SmartScreen will ask once. See the notes below.
-              </p>
-            )}
-          </aside>
-        </div>
-      </section>
-
-      {/* ── Why install it ─────────────────────────────────────────────── */}
-      <section className="mt-4 grid gap-4 sm:grid-cols-3">
-        {REASONS.map((reason) => (
-          <div key={reason.title} className="panel p-4">
-            <reason.icon className="h-4 w-4 text-accent" />
-            <h2 className="mt-2 text-[14px] font-semibold text-ink">{reason.title}</h2>
-            <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-soft">{reason.body}</p>
-          </div>
-        ))}
-      </section>
-
-      {/* ── Install steps ──────────────────────────────────────────────── */}
-      <section className="panel mt-4 p-5 sm:p-6">
-        <h2 className="text-[16px] font-semibold text-ink">Install it in three steps</h2>
-        <ol className="mt-4 space-y-3">
-          {STEPS.map((step, index) => (
-            <li key={step.title} className="flex gap-3">
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line-strong bg-ink/[0.06] text-[11px] font-bold text-accent">
-                {index + 1}
-              </span>
-              <div>
-                <p className="text-[13.5px] font-semibold text-ink">{step.title}</p>
-                <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-soft">{step.body}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-
-        <div className="mt-5 flex items-start gap-2.5 rounded-panel border border-line bg-ink/[0.03] p-3.5">
-          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-          <p className="text-[12.5px] leading-relaxed text-ink-soft">
-            <b className="text-ink">Not code-signed.</b> Windows SmartScreen and
-            some antivirus products flag every unsigned installer. If you would
-            rather not trust a random binary, use the web app — it does the same
-            job in a tab.
-          </p>
-        </div>
-      </section>
-
-      {/* ── Requirements + web comparison ──────────────────────────────── */}
-      <section className="mt-4 grid gap-4 lg:grid-cols-2">
-        <div className="panel p-5">
-          <h2 className="text-[15px] font-semibold text-ink">What it needs</h2>
-          <dl className="mt-3 divide-y divide-line">
-            <Row label="Windows" value={release.minimumWindows} />
-            <Row label="Disk" value={`${release.installedSize} (installer ${formatBytes(release.sizeBytes)})`} />
-            <Row label="Node.js" value="Not required — bundled" />
-            <Row label="Internet" value="For new videos and AI answers" />
-            <Row label="API key" value="Optional — a built-in free key may be included" />
-          </dl>
-        </div>
-
-        <div className="panel p-5">
-          <h2 className="text-[15px] font-semibold text-ink">Desktop vs. website</h2>
-          <div className="mt-3 overflow-hidden rounded-panel border border-line">
-            <table className="w-full border-collapse text-left text-[12.5px]">
-              <thead>
-                <tr className="bg-ink/[0.04] text-[11px] tracking-[0.08em] text-ink-faint uppercase">
-                  <th className="px-3 py-2 font-semibold"> </th>
-                  <th className="px-3 py-2 font-semibold">Windows</th>
-                  <th className="px-3 py-2 font-semibold">Web</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line text-ink-soft">
-                <CompareRow name="Install" windows="Yes" web="No" />
-                <CompareRow name="Caption requests from" windows="Your PC" web="Vercel" />
-                <CompareRow name="Needs a browser tab" windows="No" web="Yes" />
-                <CompareRow name="Updates" windows="Reinstall" web="Automatic" />
-                <CompareRow name="Works on phones" windows="No" web="Yes" />
-              </tbody>
-            </table>
           </div>
         </div>
       </section>
 
-      {/* ── FAQ ────────────────────────────────────────────────────────── */}
-      <section className="panel mt-4 p-5 sm:p-6">
-        <h2 className="text-[16px] font-semibold text-ink">Questions people actually ask</h2>
-        <div className="mt-3 divide-y divide-line">
+      {/* ── FAQ ──────────────────────────────────────────────────────────── */}
+      <section className="panel mx-auto mt-4 max-w-3xl p-5">
+        <h2 className="text-[15px] font-semibold text-ink">Before you install</h2>
+        <div className="mt-2 divide-y divide-line">
           {FAQ.map((entry) => (
             <details key={entry.q} className="group py-3">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[13.5px] font-medium text-ink marker:hidden">
                 {entry.q}
-                <span className="text-ink-faint transition-transform group-open:rotate-90">›</span>
+                <span className="text-ink-faint transition-transform group-open:rotate-90">
+                  ›
+                </span>
               </summary>
               <p className="mt-2 text-[12.5px] leading-relaxed text-ink-soft">{entry.a}</p>
             </details>
           ))}
         </div>
       </section>
-
-      {/* ── Honest footer note + next steps ────────────────────────────── */}
-      <section className="panel mt-4 p-5">
-        <div className="flex items-start gap-2.5">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-          <p className="text-[12.5px] leading-relaxed text-ink-soft">
-            The build above was produced by the repository&apos;s Windows CI job.
-            It installs and launches on Windows 10/11; the project still does not
-            promise access to private, age-gated or otherwise unavailable YouTube
-            captions, because that depends on YouTube and your network, not on the
-            app.
-          </p>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/" className="btn btn-primary h-9 gap-2 px-3 text-[12.5px]">
-            Open the studio
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-          <Link href="/connector" className="btn h-9 gap-2 border border-line px-3 text-[12.5px]">
-            Stay in the browser — Connector add-on
-          </Link>
-          <Link href="/status" className="btn h-9 gap-2 border border-line px-3 text-[12.5px]">
-            Check what works right now
-          </Link>
-        </div>
-      </section>
     </main>
-  );
-}
-
-function Meta({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[10px] font-semibold tracking-[0.12em] text-ink-faint uppercase">
-        {label}
-      </dt>
-      <dd className="mt-0.5 text-ink-soft">{value}</dd>
-    </div>
   );
 }
 
@@ -332,25 +256,5 @@ function Row({ label, value }: { label: string; value: string }) {
       <dt className="text-[12px] text-ink-faint">{label}</dt>
       <dd className="text-right text-[12.5px] text-ink-soft">{value}</dd>
     </div>
-  );
-}
-
-function CompareRow({
-  name,
-  windows,
-  web,
-}: {
-  name: string;
-  windows: string;
-  web: string;
-}) {
-  return (
-    <tr>
-      <th scope="row" className="px-3 py-2 text-left text-[12px] font-medium text-ink-faint">
-        {name}
-      </th>
-      <td className="px-3 py-2">{windows}</td>
-      <td className="px-3 py-2">{web}</td>
-    </tr>
   );
 }

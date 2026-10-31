@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Activity, MonitorDown } from "lucide-react";
+import { Activity, Download } from "lucide-react";
 
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { NexAIMark } from "@/components/assistant/AiLogos";
@@ -63,12 +63,13 @@ export function StudioHeader() {
 
           <Link
             href="/app"
-            title="Download the Windows app"
-            aria-label="Download the Windows app"
+            title="Download the TranStudio app"
+            aria-label="Download the TranStudio app"
+            data-app-download
             className="btn h-9 gap-1.5 border border-line px-2 sm:px-2.5"
           >
-            <MonitorDown className="h-4 w-4" />
-            <span className="hidden text-[12px] font-semibold lg:inline">Windows</span>
+            <Download className="h-4 w-4" />
+            <span className="text-[12px] font-semibold">App</span>
           </Link>
 
           <Link
