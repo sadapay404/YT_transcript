@@ -12,7 +12,7 @@ import {
 } from "./download";
 
 describe("formatBytes", () => {
-  it("formats the shipped archive in whole megabytes", () => {
+  it("formats the shipped installer in whole megabytes", () => {
     expect(formatBytes(WINDOWS_RELEASE.sizeBytes)).toBe("168 MB");
   });
 
@@ -62,8 +62,9 @@ describe("WINDOWS_RELEASE", () => {
     );
   });
 
-  it("names an installer that matches the advertised version", () => {
-    expect(WINDOWS_RELEASE.installerName).toContain(WINDOWS_RELEASE.version);
+  it("downloads a single .exe and advertises a real file size", () => {
+    expect(WINDOWS_RELEASE.fileName.endsWith(".exe")).toBe(true);
+    expect(WINDOWS_RELEASE.sizeBytes).toBeGreaterThan(0);
   });
 });
 

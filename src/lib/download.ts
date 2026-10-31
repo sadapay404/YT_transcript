@@ -6,8 +6,8 @@
  *  on Vercel. Two reasons:
  *
  *   1. Vercel's free (Hobby) plan caps static file uploads at 100 MB, and the
- *      current Windows archive is ~168 MB — the deployment would be rejected.
- *      Even under the cap, every deploy would re-upload the whole binary.
+ *      current installer is ~168 MB — the deployment would be rejected. Even
+ *      under the cap, every deploy would re-upload the whole binary.
  *   2. Git is a poor place for build artifacts; the repository stays small.
  *
  *  So the build lives in Google Drive and `/app` links to it. When a new
@@ -24,15 +24,17 @@
 export interface WindowsRelease {
   /** App version inside the installer (`package.json` → `version`). */
   version: string;
-  /** The executable the NSIS installer writes, as shipped in the archive. */
-  installerName: string;
-  /** Public file name of the archive in Drive. */
-  archiveName: string;
-  /** Archive size in bytes (measured, not guessed — the UI formats it). */
+  /**
+   * Public file name of the download — the `.exe` users double-click. The
+   * owner renames the NSIS output for sharing, so this is the *published*
+   * name, not necessarily the one electron-builder wrote.
+   */
+  fileName: string;
+  /** File size in bytes (measured, not guessed — the UI formats it). */
   sizeBytes: number;
   /** ISO date (YYYY-MM-DD) the build was produced. */
   releasedAt: string;
-  /** Google Drive file id of the archive. Empty string = no download yet. */
+  /** Google Drive file id of the installer. Empty string = no download yet. */
   driveFileId: string;
   /**
    * Optional absolute URL that takes priority over the Drive file — use it the
@@ -57,17 +59,18 @@ export interface WindowsRelease {
  * The build currently offered on `/app`.
  *
  * Produced by `.github/workflows/desktop.yml` on `windows-latest` from commit
- * `4c75727`. Uploaded to Drive because the Actions artifact link is private to
- * the repository owner and expires.
+ * `4c75727` and published to Google Drive (shared "Anyone with the link →
+ * Viewer"), because the Actions artifact link is private to the repository
+ * owner and expires.
  */
 export const WINDOWS_RELEASE: WindowsRelease = {
   version: "0.1.0",
-  installerName: "TranStudio-Setup-0.1.0.exe",
-  archiveName: "TranStudio-Windows-4c75727abe4216d4d42d05915ba8b22a3eeb9853.zip",
-  sizeBytes: 175_804_348,
-  releasedAt: "2026-09-26",
-  driveFileId: "1GJLsGjiDGjFhrftw2Xvf0KDk7Bw8D_WK",
+  fileName: "TranStudio - By Mubashir.exe",
+  sizeBytes: 175_959_790,
+  releasedAt: "2026-10-31",
+  driveFileId: "1FX9iGKNkZKgqbHCzarlLv3XlnOy8xmzD",
   minimumWindows: "Windows 10 or 11 (64-bit)",
+  // Estimate: the Electron runtime plus the traced standalone Next server.
   installedSize: "about 600 MB",
   unsigned: true,
 };

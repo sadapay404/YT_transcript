@@ -51,16 +51,12 @@ const REASONS = [
 
 const STEPS = [
   {
-    title: "Download the archive",
-    body: `Grab the ${formatBytes(WINDOWS_RELEASE.sizeBytes)} zip. Chrome or Edge may ask where to save it.`,
+    title: "Download the installer",
+    body: `One ${formatBytes(WINDOWS_RELEASE.sizeBytes)} .exe — no zip to extract. Chrome or Edge may ask where to save it; Windows may warn about the download because the file is unsigned.`,
   },
   {
-    title: "Right-click → Extract All",
-    body: "Windows can run an installer from inside a zip in weird ways. Extract it to a folder you can see, then open that folder.",
-  },
-  {
-    title: `Run ${WINDOWS_RELEASE.installerName}`,
-    body: "The NSIS installer lets you pick the install folder and creates Start-menu and desktop shortcuts.",
+    title: `Run ${WINDOWS_RELEASE.fileName}`,
+    body: "The NSIS installer lets you pick the install folder and creates Start-menu and desktop shortcuts. Nothing else needs installing — the local Next.js server ships inside the app.",
   },
   {
     title: "Get past SmartScreen once",
@@ -164,7 +160,7 @@ export function WindowsAppPage() {
 
             <dl className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-[12px]">
               <Meta label="Version" value={`v${release.version}`} />
-              <Meta label="Archive" value={`${formatBytes(release.sizeBytes)} · .zip`} />
+              <Meta label="Installer" value={`${formatBytes(release.sizeBytes)} · .exe`} />
               <Meta label="Released" value={formatReleaseDate(release.releasedAt)} />
               <Meta label="Installed" value={release.installedSize} />
             </dl>
@@ -212,7 +208,7 @@ export function WindowsAppPage() {
 
       {/* ── Install steps ──────────────────────────────────────────────── */}
       <section className="panel mt-4 p-5 sm:p-6">
-        <h2 className="text-[16px] font-semibold text-ink">Install it in four steps</h2>
+        <h2 className="text-[16px] font-semibold text-ink">Install it in three steps</h2>
         <ol className="mt-4 space-y-3">
           {STEPS.map((step, index) => (
             <li key={step.title} className="flex gap-3">
@@ -244,7 +240,7 @@ export function WindowsAppPage() {
           <h2 className="text-[15px] font-semibold text-ink">What it needs</h2>
           <dl className="mt-3 divide-y divide-line">
             <Row label="Windows" value={release.minimumWindows} />
-            <Row label="Disk" value={`${release.installedSize} (installer archive ${formatBytes(release.sizeBytes)})`} />
+            <Row label="Disk" value={`${release.installedSize} (installer ${formatBytes(release.sizeBytes)})`} />
             <Row label="Node.js" value="Not required — bundled" />
             <Row label="Internet" value="For new videos and AI answers" />
             <Row label="API key" value="Optional — a built-in free key may be included" />

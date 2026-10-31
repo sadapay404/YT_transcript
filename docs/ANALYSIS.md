@@ -74,7 +74,7 @@ push, with **no secrets**, so a missing `GEMINI_API_KEY` can never fail a build.
 | - | ---- | ------ | ---------- |
 | 1 | **YouTube blocks datacenter IP ranges.** Vercel's egress is frequently challenged (`LOGIN_REQUIRED`). | Live transcripts can fall back to the bundled demo on the hosted site. This is the single biggest product risk. | The caption ladder (5 client identities → unsigned timedtext → watch page → `youtube-transcript`) already maximises the chance of success; the Connector add-on and the desktop build move requests to the visitor's network. Check `/status` on the live URL, and set `TRANSCRIPT_PROXY_URL` if you have a residential-quality proxy. |
 | 2 | **Every route is dynamic.** `layout.tsx` awaits the preferences cookie, so `/`, `/app`, `/connector` and `/status` are server-rendered per request. | Slightly slower first paint; no static CDN cache. Well inside Hobby limits. | Leave as is (the cookie-rendered theme is the reason it exists), or make the landing page static later and accept a theme flash for returning visitors. |
-| 3 | **The installer cannot be hosted here.** Vercel Hobby caps static uploads at 100 MB; the Windows archive is ~168 MB. | A `public/*.exe` deploy would fail outright. | `/app` links to the Drive copy through `/api/download/windows`; see `WINDOWS_DOWNLOAD.md`. |
+| 3 | **The installer cannot be hosted here.** Vercel Hobby caps static uploads at 100 MB; the installer is ~168 MB (175,959,790 bytes). | A `public/*.exe` deploy would fail outright. | `/app` links to the public Drive copy (`TranStudio - By Mubashir.exe`) through `/api/download/windows`; see `WINDOWS_DOWNLOAD.md`. |
 | 4 | **Drive links can rate-limit** ("download quota exceeded") for popular files. | Occasional failed downloads. | Move to a GitHub Release asset (`externalUrl` in `src/lib/download.ts`) when the project gets traffic — releases support 2 GB files and stable URLs. |
 | 5 | **The desktop build may bundle a shared API key** (`electron/bundled-keys.cjs`). | Anyone can decode it from `app.asar`; quota is shared by every user. | Already documented in the source. Set a spend/quota cap on that key; ship without `bundled-keys.dat` if that is unacceptable. |
 | 6 | **Hobby plan is non-commercial.** | Ads/payments on the site would breach Vercel's terms. | Keep it personal/free, or upgrade before monetising. |
@@ -95,7 +95,7 @@ push, with **no secrets**, so a missing `GEMINI_API_KEY` can never fail a build.
 
 ## 7. Suggested next steps (in order)
 
-1. Make the Windows archive public in Drive (**Anyone with the link → Viewer**),
+1. Keep the Drive installer shared as **Anyone with the link → Viewer** (it is today),
    or move it to a GitHub Release and set `externalUrl`.
 2. Deploy to Vercel with `GEMINI_API_KEY` (and optionally `GROQ_API_KEY`).
 3. Open `/status` on the live URL and read the `attempts` list for the caption
