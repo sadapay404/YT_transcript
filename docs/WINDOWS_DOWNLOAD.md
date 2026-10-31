@@ -1,114 +1,113 @@
 # Publishing the Windows build (`/app`)
 
-The download page is `https://<your-site>/app`. It never hosts the binary: Vercel's
-free plan rejects static uploads over **100 MB**, and the installer is ~168 MB.
-The build is therefore uploaded once to Google Drive (or a GitHub Release) and `/app`
-links to it.
+The download page is `https://<your-site>/app`. Visitors get a **direct file
+download** — the browser starts saving `TranStudio-Setup-<version>.exe`
+immediately, with no Drive page, no "download anyway" button and no redirect
+route in between.
 
-Everything the page shows comes from **one file**:
+The binary is **not** in this repository and **not** on Vercel:
+
+| Option | Verdict |
+| --- | --- |
+| `public/*.exe` in this repo | ❌ Vercel's free plan rejects static uploads over **100 MB**; the installer is ~168 MB. Git is also the wrong place for build artifacts. |
+| **GitHub Releases** | ✅ **What we use.** Direct URL, 2 GB per asset, free, permanent, versioned, no bandwidth bill. |
+| Google Drive | ⚠️ Works, but it is a *redirect* to a viewer page with a confirmation button, and popular files hit "download quota exceeded". Kept only as an optional mirror. |
+| Cloudflare R2 / B2 | ✅ Fine (free tier, direct URLs) but needs a bucket + public domain. Unnecessary when Releases is right here. |
+
+**Direct URL format**
 
 ```text
-src/lib/download.ts  →  WINDOWS_RELEASE
+https://github.com/sadapay404/YT_transcript/releases/download/v0.1.0/TranStudio-Setup-0.1.0.exe
 ```
 
-| Field            | What it is                                                          |
-| ---------------- | ------------------------------------------------------------------- |
-| `version`        | Version inside the installer (`package.json` → `version`).           |
-| `fileName`       | Public name of the published `.exe` (users double-click this).       |
-| `sizeBytes`      | Measured file size in bytes — the UI formats it (`168 MB`).          |
-| `releasedAt`     | ISO date (`YYYY-MM-DD`) of the published build.                      |
-| `driveFileId`    | Google Drive file id of the installer.                               |
-| `externalUrl`    | Optional override (GitHub Release asset, CDN). Wins over Drive.      |
-| `sha256`         | Optional installer hash, shown only when you actually have it.       |
-| `minimumWindows` | e.g. `Windows 10 or 11 (64-bit)`.                                    |
-| `installedSize`  | Approximate installed footprint.                                     |
-| `unsigned`       | `true` while the build has no code-signing certificate.              |
-
-`https://<your-site>/api/download/windows` is a stable redirect to whatever
-`WINDOWS_RELEASE` points at — hand that URL out instead of a Drive URL, so links in
-tweets, READMEs and video descriptions keep working when the host changes.
+That exact URL lives in `src/lib/download.ts` → `WINDOWS_RELEASE.downloadUrl`
+and is the `href` of the button on `/app`.
 
 ---
 
-## Current build
+## Shipping a new version (one command)
 
-| | |
-| --- | --- |
-| File | `TranStudio - By Mubashir.exe` |
-| Size | 175,959,790 bytes (168 MB) |
-| Published | 2026-10-31 |
-| Drive id | `1FX9iGKNkZKgqbHCzarlLv3XlnOy8xmzD` |
-| Sharing | **Anyone with the link → Viewer** (required) |
-| Origin | GitHub Actions *Windows desktop installer*, commit `4c75727` |
+The Windows workflow publishes the asset for you — nothing to download or
+upload by hand:
 
----
-
-## Releasing a new build
-
-1. **Build it.** Run `.github/workflows/desktop.yml` — from a pull request touching
-   `electron/**` or `src/**`, from a `v*` tag, or manually via **Run workflow**.
-2. **Download the artifact.** On the run page, download
-   `TranStudio-Windows-<sha>.zip` and extract it; inside is
-   `release/TranStudio-Setup-<version>.exe`.
-3. **Upload the `.exe`** to Drive (folder: *TranStudio — Windows builds*). You can
-   rename it for sharing, e.g. `TranStudio - By Mubashir.exe`; the page shows
-   whatever `fileName` says, so keep the two in sync.
-4. **Share it publicly**: right-click → **Share** → **Anyone with the link** →
-   **Viewer** → *Copy link*.
-   A private file makes the download button bounce to a Google sign-in page, which
-   looks like a broken website.
-5. **Take the file id** from the link — `.../file/d/<FILE_ID>/view`.
-6. **Update `WINDOWS_RELEASE`** in `src/lib/download.ts` (`version`, `fileName`,
-   `sizeBytes`, `releasedAt`, `driveFileId`).
-7. Commit, let Vercel deploy, then open `/app` and click the button once. The
-   168 MB download should start without a Drive preview page in between.
-
-### Measuring size and hash (Windows)
-
-```powershell
-Get-Item '.\TranStudio - By Mubashir.exe' | Select-Object Length
-Get-FileHash '.\TranStudio - By Mubashir.exe' -Algorithm SHA256
+```bash
+# bump "version" in package.json first, e.g. 0.1.1
+git commit -am "Release 0.1.1"
+git push origin arena/9d5e5350-yt-transcript
+git tag v0.1.1
+git push origin v0.1.1        # ← this builds the installer AND publishes the release
 ```
 
-Put the byte count in `sizeBytes`. Only add `sha256` when you paste the real value.
+What the tag does:
+
+1. `.github/workflows/desktop.yml` runs on `windows-latest` (~8–12 min).
+2. `npm run build` → `.next/standalone`; `scripts/prepare-electron.mjs` packs it.
+3. `electron-builder --win` produces `release/TranStudio-Setup-<version>.exe`.
+4. **Publish step:** creates (or reuses) the GitHub Release for the tag and
+   uploads the installer with `gh release upload`, then prints the direct URL.
+
+Then point the page at the new file — one edit in `src/lib/download.ts`:
+
+```ts
+export const WINDOWS_RELEASE: WindowsRelease = {
+  version: "0.1.1",
+  tag: "v0.1.1",
+  fileName: "TranStudio-Setup-0.1.1.exe",
+  sizeBytes: 175_959_790,        // exact bytes of the new asset
+  releasedAt: "2026-11-02",
+  downloadUrl: releaseAssetUrl("v0.1.1", "TranStudio-Setup-0.1.1.exe"),
+  driveFileId: "",               // optional mirror
+  ...
+};
+```
+
+Commit → Vercel deploys → `/app` serves the new direct link. (The `downloadUrl`
+is the only field the button needs; `sizeBytes` is what the page *advertises*,
+so update it from the real file to keep the number honest.)
+
+Get the exact size from the release page or the workflow log line
+`Published TranStudio-Setup-0.1.1.exe (175959790 bytes) to release v0.1.1`.
 
 ---
 
-## Moving to GitHub Releases instead (recommended long term)
+## Uploading an installer you already have (no tag)
 
-GitHub Releases are free, public, permanent, accept files up to 2 GB, and give a
-stable versioned URL — better than Drive for a downloadable app (Drive can answer
-"download quota exceeded" when a file becomes popular).
+Useful for a locally built `.exe`:
 
-1. Publish the installer as a release asset, e.g.
-   `https://github.com/<owner>/<repo>/releases/download/v0.1.0/TranStudio-Setup-0.1.0.exe`.
-2. Set it in `src/lib/download.ts`:
+```bash
+gh release create v0.1.0 release/TranStudio-Setup-0.1.0.exe \
+  --title "TranStudio v0.1.0" --generate-notes
+# or, into an existing release:
+gh release upload v0.1.0 "TranStudio - By Mubashir.exe" --clobber
+```
 
-   ```ts
-   externalUrl:
-     "https://github.com/sadapay404/YT_transcript/releases/download/v0.1.0/TranStudio-Setup-0.1.0.exe",
-   ```
-
-3. Keep `driveFileId` to retain the "Google Drive copy" button; empty it to hide it.
-
-Nothing else changes: `/app`, the metadata and `/api/download/windows` all follow.
+> Asset names with spaces get rewritten by GitHub (`TranStudio.-.By.Mubashir.exe`).
+> Rename the file to `TranStudio-Setup-<version>.exe` before uploading so the URL
+> in `downloadUrl` stays clean and predictable.
 
 ---
 
-## Why not put the `.exe` in `public/`?
+## The stable short link
 
-- Vercel Hobby caps static file uploads at 100 MB; the deploy fails.
-- Git is not a file host — a 168 MB blob would live in history forever.
-- Every deploy would re-upload the binary, and every download would count against
-  the 100 GB/month Fast Data Transfer allowance.
+`https://<your-site>/api/download/windows` 307s to whatever `WINDOWS_RELEASE`
+points at. Hand *that* out where a URL must never break (video descriptions,
+READMEs, QR codes) — it keeps working when the version or the host changes.
+The `/app` button itself skips the route and links to the asset directly.
 
-Drive (or a GitHub Release) keeps the deploy small and the download free.
+---
+
+## Why the button can be disabled
+
+If `downloadUrl` is `null` and there is no Drive mirror, `/app` renders a
+disabled "Build not published yet" button instead of a link that 404s. A dead
+download button on a release page is worse than an honest empty state.
 
 ---
 
 ## Keep the repository's honesty rules
 
-The page already says the build is **unsigned**, that SmartScreen will warn once, and
-that it does not guarantee access to private, age-gated or otherwise unavailable
-YouTube captions. Do not remove those notes to make the page look cleaner — they are
-the difference between a download page and a promise the app cannot keep.
+The page already says the build is **unsigned**, that SmartScreen will warn once,
+and that it does not guarantee access to private, age-gated or otherwise
+unavailable YouTube captions. Do not remove those notes to make the page look
+cleaner — they are the difference between a download page and a promise the app
+cannot keep.

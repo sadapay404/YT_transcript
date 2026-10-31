@@ -63,12 +63,20 @@ npm run build && npm start
 
 ## Installable Windows app
 
-**Download page: `/app`** (linked from the header and footer). The installer itself is
-**not** in this repository and is **not** served by Vercel — Vercel's free plan rejects
-static uploads over 100 MB and this build is ~168 MB. The page links to the uploaded
-build and the stable link `/api/download/windows` redirects to it. Release details live
-in one place: [`src/lib/download.ts`](src/lib/download.ts). Publishing a new build is
-documented in **[docs/WINDOWS_DOWNLOAD.md](docs/WINDOWS_DOWNLOAD.md)**.
+**Download page: `/app`** (linked from the header and footer). The button is a
+**direct file download** from a GitHub Release:
+
+```text
+https://github.com/sadapay404/YT_transcript/releases/download/v0.1.0/TranStudio-Setup-0.1.0.exe
+```
+
+No Drive page, no redirect in between. The installer is **not** in this repository and
+**not** on Vercel — the free plan rejects static uploads over 100 MB and the build is
+~168 MB. Pushing a `v*` tag makes the Windows workflow build the installer and attach
+it to the release automatically; the URL, version and size live in one place,
+[`src/lib/download.ts`](src/lib/download.ts). The short link
+`/api/download/windows` redirects to the current file for places a URL must never
+change. Full procedure: **[docs/WINDOWS_DOWNLOAD.md](docs/WINDOWS_DOWNLOAD.md)**.
 
 TranStudio also has an Electron desktop target that reuses this same Next.js/React UI,
 animations, Steps 1–3, transcript data layer, AI surfaces, and paste fallback. The
@@ -287,7 +295,7 @@ npx vitest run --config vitest.verify.config.ts
 | **3** | Sync engine: auto-scroll follow, kinetic liquid active line | ✅ shipped |
 | **4** | Gemini chat sidebar (streaming, transcript context injected silently) | ✅ shipped |
 | **5** | Viral Clipper: structured JSON clips → colour-coded transcript bands with copy/loop-play | ✅ shipped |
-| **6** | Windows download page `/app` (Drive-hosted installer, stable redirect link) | ✅ shipped |
+| **6** | Windows download page `/app` (installer on GitHub Releases, direct link) | ✅ shipped |
 
 ---
 

@@ -347,11 +347,12 @@ configuration. It shows the version, size, install steps, SmartScreen note and F
 the desktop build, and links to wherever that build is hosted.
 
 **The installer is not in this repo and not on Vercel.** The free (Hobby) plan rejects
-static file uploads over **100 MB**, and the Windows archive is ~168 MB. So:
+static file uploads over **100 MB**, and the installer is ~168 MB. So:
 
-- the build lives in Google Drive (or a GitHub Release);
-- `src/lib/download.ts` holds the file id, version and size;
-- `/api/download/windows` redirects to it, which gives you one stable link to share.
+- the build is published as a **GitHub Release asset** (direct URL, 2 GB limit, free);
+- `src/lib/download.ts` holds that URL, the version and the size;
+- `/app` links straight to the file — no redirect, no Drive page;
+- `/api/download/windows` is a stable short link for places a URL must never change.
 
 Releasing a new build (including the sharing step that makes the button work for
 strangers) is documented in **[WINDOWS_DOWNLOAD.md](WINDOWS_DOWNLOAD.md)**.
@@ -360,11 +361,11 @@ Quick check after deploying:
 
 ```bash
 curl -sI https://your-app.vercel.app/api/download/windows | grep -i location
-# → location: https://drive.google.com/uc?export=download&id=…&confirm=t
+# → location: https://github.com/sadapay404/YT_transcript/releases/download/v0.1.0/…
 ```
 
-If the browser lands on a Google sign-in page instead of a download, the Drive file
-is still private — set its sharing to **Anyone with the link → Viewer**.
+If that page 404s, the release asset has not been uploaded yet — push a `v*` tag or
+upload the `.exe` to the release (see WINDOWS_DOWNLOAD.md).
 
 ## PWA, domain and cost hygiene
 
